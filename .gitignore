@@ -1,0 +1,6 @@
+# Bí mật tạo trên máy triển khai, không lưu vào kho mã nguồn.
+secrets/*.txt
+
+# Bytecode sinh ra khi kiểm tra collector cục bộ.
+__pycache__/
+*.py[cod]

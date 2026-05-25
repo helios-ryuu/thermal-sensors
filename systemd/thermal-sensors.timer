@@ -1,0 +1,13 @@
+[Unit]
+Description=Thu thập nhiệt độ iMac mỗi 15 giây
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15s
+AccuracySec=1s
+Persistent=true
+Unit=thermal-sensors.service
+
+[Install]
+WantedBy=timers.target
+
