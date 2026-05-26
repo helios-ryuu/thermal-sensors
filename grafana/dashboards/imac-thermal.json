@@ -624,7 +624,7 @@
         "defaults": {
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 0,
             "lineInterpolation": "linear",
             "lineWidth": 2,
             "pointSize": 5,
@@ -646,7 +646,7 @@
               },
               {
                 "id": "custom.fillOpacity",
-                "value": 20
+                "value": 10
               },
               {
                 "id": "color",
@@ -725,7 +725,7 @@
         "defaults": {
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 0,
             "lineWidth": 2,
             "pointSize": 5,
             "showPoints": "never"
@@ -774,7 +774,7 @@
         "defaults": {
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 0,
             "lineWidth": 2,
             "pointSize": 5,
             "showPoints": "never"
@@ -824,14 +824,27 @@
         "defaults": {
           "custom": {
             "drawStyle": "line",
-            "fillOpacity": 10,
+            "fillOpacity": 0,
             "lineWidth": 2,
             "pointSize": 5,
             "showPoints": "never"
           },
           "unit": "rpm"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "main"
+            },
+            "properties": [
+              {
+                "id": "custom.fillOpacity",
+                "value": 10
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -944,5 +957,5 @@
   "timezone": "browser",
   "title": "Cảm biến nhiệt độ iMac",
   "uid": "imac-thermal",
-  "version": 4
+  "version": 5
 }

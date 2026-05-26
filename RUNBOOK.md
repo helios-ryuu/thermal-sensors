@@ -407,7 +407,9 @@ nhiệt độ trung bình, cấu hình `mbpfan`, tốc độ quạt và công su
 không có line cấu hình `mbpfan`; panel CPU riêng vẫn có package cùng từng core.
 Gauge, panel cấu hình và line giới hạn quạt phải phản ánh giá trị trong
 `/etc/mbpfan.conf`. Các biểu đồ time-series có vùng nền ban ngày
-`06:00-18:00` và ban đêm `18:00-06:00` theo múi giờ trình duyệt.
+`06:00-18:00` và ban đêm `18:00-06:00` theo múi giờ trình duyệt. Chỉ line
+trung bình toàn máy, tốc độ quạt `main` và công suất GPU có fill mờ; các line
+khác không tô vùng dưới đường.
 
 Khi chọn khoảng thời gian cũ trước lần triển khai collector mới, line CPU
 package và trung bình vẫn tính từ dữ liệu sensor đã lưu; line/panel cấu hình
