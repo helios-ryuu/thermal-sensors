@@ -656,6 +656,21 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "gpu / edge"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
           }
         ]
       },
@@ -929,5 +944,5 @@
   "timezone": "browser",
   "title": "Cảm biến nhiệt độ iMac",
   "uid": "imac-thermal",
-  "version": 3
+  "version": 4
 }
