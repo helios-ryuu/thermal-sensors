@@ -129,8 +129,8 @@ Giải pháp giám sát không tự động thay đổi cấu hình quạt này.
 - Không đổi binding Prometheus/node_exporter sang LAN công cộng.
 - Dừng triển khai nếu preflight phát hiện xung đột cổng, thiếu dung lượng đĩa
   hoặc tài nguyên của máy đang ảnh hưởng workload đồ án.
-- Pin version image; không đổi sang tag `latest` trong lúc hệ thống đang cần
-  ổn định.
+- Các image hiện dùng tag `latest`; chỉ chạy `docker compose pull` sau khi đã
+  sao lưu và sẵn sàng nghiệm thu hoặc rollback theo runbook.
 
 ## Triển khai
 

@@ -27,13 +27,17 @@ xạ sang bản chạy như sau:
 | `grafana/provisioning/dashboards/thermal.yml` | `/opt/thermal-monitoring/grafana/provisioning/dashboards/thermal.yml` | Nạp dashboard từ tệp |
 | `grafana/dashboards/imac-thermal.json` | `/opt/thermal-monitoring/grafana/dashboards/imac-thermal.json` | Dashboard nhiệt độ có sẵn |
 
-Ba image Docker được pin cố định theo phiên bản đã chọn ngày `2026-05-26`:
+Ba dịch vụ Docker sử dụng tag `latest` theo `compose.yaml` hiện tại:
 
 | Dịch vụ | Image |
 | --- | --- |
-| Grafana | `grafana/grafana:13.0.1-ubuntu` |
-| Prometheus | `prom/prometheus:v3.11.3` |
-| node_exporter | `prom/node-exporter:v1.11.1` |
+| Grafana | `grafana/grafana:latest` |
+| Prometheus | `prom/prometheus:latest` |
+| node_exporter | `prom/node-exporter:latest` |
+
+Tag `latest` có thể trỏ sang image khác sau mỗi lần `docker compose pull`.
+Vì vậy, các bước làm mới image ở mục 15 luôn đi kèm sao lưu, ghi nhận image
+đang chạy và nghiệm thu lại.
 
 `~/thermal-sensors` là bản có quản lý phiên bản từ GitHub.
 `/opt/thermal-monitoring` là bản được Docker Compose và `systemd` sử dụng.
@@ -242,32 +246,68 @@ journalctl -u thermal-sensors.service -n 50 --no-pager
 
 ## 8. Tạo bí mật đăng nhập Grafana
 
-Xác nhận UID mà image Grafana đã pin sử dụng. Kết quả thông thường cần chứa
-`uid=472`:
+`compose.yaml` hiện dùng `grafana/grafana:latest`. Trước lần khởi động đầu
+tiên, tải đúng tag này và xác nhận danh tính tiến trình trong container:
 
 ```bash
-docker pull grafana/grafana:13.0.1-ubuntu
-docker run --rm --entrypoint id grafana/grafana:13.0.1-ubuntu
+docker pull grafana/grafana:latest
+docker run --rm --entrypoint id grafana/grafana:latest
 ```
 
-Đặt UID vừa xác nhận vào biến `GRAFANA_UID`; nếu kết quả trên không phải
-`472`, thay giá trị trước khi chạy:
+Tại thời điểm kiểm tra, image trả về:
+
+```text
+uid=472(grafana) gid=0(root) groups=0(root),0(root)
+```
+
+Không dùng `install -o 472`: trên host Ubuntu không có user tên `472`, nên
+`install` sẽ báo `invalid user: '472'`. Không cần ánh xạ UID/GID của
+container sang user trên host. Thư mục `/opt/thermal-monitoring/secrets` đã
+được tạo với mode `0700` cho `helios`; đặt file bên trong ở mode `0444` để
+Grafana đọc được sau khi Compose mount secret vào
+`/run/secrets/grafana_admin_password`, trong khi user khác trên host không thể
+đi qua thư mục cha.
+
+Nếu một mật khẩu đã từng bị hiển thị trong chat, issue hoặc log chia sẻ, bỏ
+mật khẩu đó và tạo mật khẩu mới ở bước dưới. Chỉ hiển thị mật khẩu mới trong
+terminal riêng để lưu ngay vào trình quản lý mật khẩu; không dán output vào
+tài liệu hoặc kênh trao đổi.
 
 ```bash
-GRAFANA_UID=472
 umask 077
 openssl rand -base64 32 > /tmp/grafana_admin_password.txt
-echo "Lưu mật khẩu Grafana admin sau vào trình quản lý mật khẩu:"
+echo "Lưu mật khẩu Grafana admin mới vào trình quản lý mật khẩu; không chia sẻ output:"
 cat /tmp/grafana_admin_password.txt
-sudo install -o "$GRAFANA_UID" -g "$GRAFANA_UID" -m 0400 \
+install -m 0444 \
   /tmp/grafana_admin_password.txt \
   /opt/thermal-monitoring/secrets/grafana_admin_password.txt
 rm -f /tmp/grafana_admin_password.txt
+stat -c '%U:%G %a %n' /opt/thermal-monitoring/secrets
+stat -c '%U:%G %a %n' \
+  /opt/thermal-monitoring/secrets/grafana_admin_password.txt
 ```
+
+Kết quả `stat` phải cho thấy thư mục chỉ `helios` truy cập được và file secret
+có thể đọc trong container:
+
+```text
+helios:helios 700 /opt/thermal-monitoring/secrets
+helios:helios 444 /opt/thermal-monitoring/secrets/grafana_admin_password.txt
+```
+
+Tên group có thể khác nếu tài khoản `helios` dùng primary group khác; các mode
+`700` và `444` mới là điều kiện cần xác nhận.
 
 Tệp bí mật được tạo tại `/opt/thermal-monitoring/secrets`, nằm ngoài
 `$REPO_DIR`. `.gitignore` cũng chặn `secrets/*.txt` nếu ai đó vô tình tạo
 secret trong working tree; không commit mật khẩu lên GitHub.
+
+Biến `GF_SECURITY_ADMIN_PASSWORD__FILE` trong `compose.yaml` chỉ đặt mật khẩu
+admin khi Grafana khởi tạo cơ sở dữ liệu lần đầu. Nếu volume Grafana đã được
+khởi tạo trước đó, thay file secret không tự đổi mật khẩu của tài khoản
+`admin`; khi đó dùng mật khẩu hiện tại, reset admin bằng công cụ Grafana, hoặc
+khởi tạo lại riêng volume Grafana theo mục 16.2 nếu chấp nhận mất các thay đổi
+tạo thủ công trong giao diện.
 
 ## 9. Kiểm tra và khởi động Docker Compose
 
@@ -287,21 +327,28 @@ docker compose config --quiet
 docker compose config --images
 ```
 
-Danh sách image phải đúng ba tag được pin tại mục 1. Nếu đạt, khởi động stack:
+Danh sách image phải gồm đúng ba tag `latest` tại mục 1. Lưu ý:
+`docker compose pull` sẽ lấy image mà registry đang trỏ tới bằng tag `latest`
+tại thời điểm chạy. Với lần cài đầu tiên, nếu cấu hình đạt, khởi động stack:
 
 ```bash
 docker compose pull
 docker compose up -d
 docker compose ps
 sudo ss -ltnp | grep -E ':(3000|9090)\b'
+docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
+  thermal-node-exporter thermal-prometheus thermal-grafana \
+  | tee "$HOME/thermal-monitoring-images-ban-dau.txt"
 ```
 
 Kết quả phải cho thấy Grafana chỉ bind vào `100.120.64.5:3000`, Prometheus
-chỉ bind vào `127.0.0.1:9090`, và không có port host cho node_exporter.
+chỉ bind vào `127.0.0.1:9090`, và không có port host cho node_exporter. Tệp
+`~/thermal-monitoring-images-ban-dau.txt` ghi lại image ID thực sự đã chạy,
+vì tag `latest` không đủ để nhận diện lại một bản triển khai về sau.
 
 ## 10. Nghiệm thu
 
-### 9.1. Collector và Prometheus
+### 10.1. Collector và Prometheus
 
 ```bash
 systemctl list-timers thermal-sensors.timer --no-pager
@@ -323,7 +370,7 @@ Tiêu chí đạt:
   đang cung cấp dữ liệu tương ứng.
 - Không có nhiệt độ âm hoặc sentinel `-127`.
 
-### 9.2. Grafana qua Tailscale
+### 10.2. Grafana qua Tailscale
 
 Từ host Ubuntu:
 
@@ -418,9 +465,11 @@ docker compose up -d
 ## 13. Cập nhật cấu hình từ GitHub
 
 Mỗi lần repository có thay đổi cần áp dụng lên máy Ubuntu, kiểm tra working
-tree sạch, chạy `git pull --ff-only`, rồi cài lại các tệp version hóa. Thao
-tác recreate bên dưới chỉ tác động ba container giám sát; thực hiện vào thời
-điểm chấp nhận được gián đoạn ngắn của dashboard:
+tree sạch, chạy `git pull --ff-only`, rồi cài lại các tệp version hóa. Quy
+trình này áp dụng cấu hình mới nhưng chủ động không pull image `latest`; việc
+làm mới image được thực hiện riêng tại mục 15 sau khi sao lưu. Thao tác
+recreate bên dưới chỉ tác động ba container giám sát; thực hiện vào thời điểm
+chấp nhận được gián đoạn ngắn của dashboard:
 
 ```bash
 REPO_DIR="$HOME/thermal-sensors"
@@ -448,15 +497,15 @@ sudo systemctl restart thermal-sensors.timer
 sudo systemctl start thermal-sensors.service
 cd /opt/thermal-monitoring
 docker compose config --quiet
-docker compose pull
-docker compose up -d --force-recreate
+docker compose up -d --pull never --force-recreate
 docker compose ps
 ```
 
 Sau khi cập nhật, chạy lại các bước nghiệm thu tại mục 10. Secret và volume
-không bị ghi đè bởi thao tác cài đặt này.
+không bị ghi đè bởi thao tác cài đặt này, và image đang chạy không đổi nếu
+image cũ vẫn còn trên host.
 
-## 14. Sao lưu trước khi nâng cấp
+## 14. Sao lưu trước khi nâng cấp hoặc đặt lại dữ liệu
 
 Lệnh sau sao lưu cấu hình không chứa bí mật và dừng ngắn Prometheus/Grafana
 để sao lưu volume nhất quán. Collector và `mbpfan` vẫn chạy bình thường.
@@ -487,29 +536,134 @@ ls -lh "$BACKUP_DIR"
 Mật khẩu Grafana phải được giữ trong trình quản lý mật khẩu, không nằm trong
 archive cấu hình.
 
-## 15. Nâng phiên bản có kiểm soát
+## 15. Làm mới image `latest` có kiểm soát
 
-Không đổi image sang tag `latest`. Trước khi nâng cấp:
+Vì `compose.yaml` sử dụng tag `latest`, lệnh `docker compose pull` có thể thay
+đổi phiên bản Grafana, Prometheus hoặc node_exporter mà không có thay đổi nào
+trong GitHub. Không chạy lệnh này tự động theo lịch trên máy đang phục vụ đồ
+án.
 
-1. Đọc ghi chú phát hành chính thức của Grafana, Prometheus và node_exporter.
-2. Chạy sao lưu tại mục 14.
-3. Cập nhật tag image trong `compose.yaml`, commit và push thay đổi lên
-   GitHub.
-4. Trên Ubuntu, pull repository và áp dụng theo mục 13.
-5. Kiểm tra trạng thái dịch vụ:
+Trước khi làm mới image:
+
+1. Chạy sao lưu tại mục 14.
+2. Ghi lại image ID đang chạy và gắn tag rollback cục bộ để có thể quay lại
+   nếu image mới gây lỗi.
+3. Pull các tag `latest`, khởi tạo lại container và chạy nghiệm thu mục 10.
 
 ```bash
 cd /opt/thermal-monitoring
 docker compose config --quiet
+
+STAMP="$(date +%Y%m%d-%H%M%S)"
+docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
+  thermal-node-exporter thermal-prometheus thermal-grafana \
+  | tee "$HOME/thermal-monitoring-images-truoc-$STAMP.txt"
+docker image tag "$(docker inspect --format '{{.Image}}' thermal-node-exporter)" \
+  "thermal-rollback/node-exporter:$STAMP"
+docker image tag "$(docker inspect --format '{{.Image}}' thermal-prometheus)" \
+  "thermal-rollback/prometheus:$STAMP"
+docker image tag "$(docker inspect --format '{{.Image}}' thermal-grafana)" \
+  "thermal-rollback/grafana:$STAMP"
+
 docker compose pull
 docker compose up -d
 docker compose ps
 curl -fsS http://127.0.0.1:9090/-/ready
+docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
+  thermal-node-exporter thermal-prometheus thermal-grafana \
+  | tee "$HOME/thermal-monitoring-images-sau-$STAMP.txt"
 ```
 
-Lặp lại các kiểm thử tại mục 10 sau khi nâng cấp.
+Nếu nghiệm thu thất bại và cần quay lại image vừa lưu, tạo override tạm thời
+với đúng giá trị `STAMP` của lượt cập nhật rồi khởi động lại stack:
 
-## 16. Gỡ bỏ
+```bash
+STAMP="<giá-trị-đã-ghi-lại-khi-pull-image>"
+cat > /tmp/thermal-monitoring-rollback.yaml <<YAML
+services:
+  node-exporter:
+    image: thermal-rollback/node-exporter:$STAMP
+  prometheus:
+    image: thermal-rollback/prometheus:$STAMP
+  grafana:
+    image: thermal-rollback/grafana:$STAMP
+YAML
+
+docker compose -f compose.yaml -f /tmp/thermal-monitoring-rollback.yaml up -d
+docker compose -f compose.yaml -f /tmp/thermal-monitoring-rollback.yaml ps
+curl -fsS http://127.0.0.1:9090/-/ready
+```
+
+Sau khi image mới đã hoạt động ổn định và không còn cần rollback, có thể xóa
+các tag `thermal-rollback/*:$STAMP` trong một đợt bảo trì riêng.
+
+## 16. Đặt lại dữ liệu lưu trữ
+
+Các thao tác trong mục này xóa dữ liệu Docker volume của stack giám sát nhưng
+không xóa repository `~/thermal-sensors`, cấu hình đã cài trong
+`/opt/thermal-monitoring`, collector `systemd`, `mbpfan` hoặc tài nguyên
+Kubernetes. Chạy sao lưu tại mục 14 trước nếu còn cần lịch sử cũ.
+
+Tệp textfile `/var/lib/thermal-sensors/textfile/thermal_sensors.prom` chỉ chứa
+mẫu cảm biến mới nhất, không phải lịch sử dashboard; không cần xóa tệp này
+khi reset volume.
+
+### 16.1. Xóa lịch sử Prometheus, giữ nguyên Grafana
+
+Dùng lựa chọn này khi muốn xóa toàn bộ chuỗi thời gian nhiệt độ/RPM cũ nhưng
+giữ tài khoản, datasource và trạng thái Grafana hiện có:
+
+```bash
+cd /opt/thermal-monitoring
+docker compose stop prometheus
+docker compose rm -f prometheus
+docker volume rm thermal-monitoring-prometheus-data
+docker compose up -d prometheus
+curl -fsS http://127.0.0.1:9090/-/ready
+```
+
+Sau khi Prometheus thu thập lại, dashboard vẫn mở được nhưng chỉ có dữ liệu
+mới kể từ thời điểm reset.
+
+### 16.2. Khởi tạo lại Grafana, giữ lịch sử Prometheus
+
+Dùng lựa chọn này khi muốn xóa cơ sở dữ liệu Grafana, ví dụ để áp dụng lại
+mật khẩu admin từ secret. Datasource và dashboard provisioning sẽ được nạp
+lại từ các tệp cấu hình; các thay đổi tạo thủ công trong giao diện Grafana sẽ
+mất:
+
+```bash
+cd /opt/thermal-monitoring
+docker compose stop grafana
+docker compose rm -f grafana
+docker volume rm thermal-monitoring-grafana-data
+docker compose up -d grafana
+curl -I http://100.120.64.5:3000/login
+```
+
+Sau bước này, đăng nhập bằng user `admin` và mật khẩu hiện có trong
+`/opt/thermal-monitoring/secrets/grafana_admin_password.txt`.
+
+### 16.3. Reset toàn bộ dữ liệu Prometheus và Grafana
+
+Dùng lựa chọn này khi muốn bắt đầu dashboard mới hoàn toàn nhưng vẫn giữ
+collector và cấu hình triển khai:
+
+```bash
+cd /opt/thermal-monitoring
+docker compose down
+docker volume rm \
+  thermal-monitoring-prometheus-data \
+  thermal-monitoring-grafana-data
+docker compose up -d
+curl -fsS http://127.0.0.1:9090/-/ready
+curl -I http://100.120.64.5:3000/login
+```
+
+Chạy lại các bước nghiệm thu tại mục 10. Grafana sử dụng lại mật khẩu từ
+secret; Prometheus bắt đầu lưu lịch sử mới từ lần scrape tiếp theo.
+
+## 17. Gỡ bỏ
 
 Dừng stack và collector nhưng giữ dữ liệu để có thể phục hồi:
 
@@ -537,13 +691,21 @@ Quy trình gỡ bỏ này không tác động `/etc/mbpfan.conf`, dịch vụ `m
 bất kỳ tài nguyên Kubernetes nào. Working tree `~/thermal-sensors` được giữ
 lại để tiếp tục theo dõi mã nguồn; việc xóa clone GitHub là thao tác riêng.
 
-## 17. Xử lý sự cố nhanh
+## 18. Xử lý sự cố nhanh
 
 | Hiện tượng | Kiểm tra | Hành động trong phạm vi stack |
 | --- | --- | --- |
 | Dashboard không có dữ liệu | `thermal_collector_success`, `journalctl -u thermal-sensors.service` | Sửa lỗi đọc `sensors` hoặc quyền thư mục textfile, rồi chạy lại collector |
 | Target Prometheus down | `docker compose logs node-exporter prometheus` | Xác nhận file `.prom` và network Compose |
 | Grafana không truy cập được từ tailnet | `tailscale ip -4`, `ss -ltnp`, log Grafana | Xác nhận IP binding và kết nối Tailscale |
+| `install: invalid user: '472'` khi tạo secret | Output `docker run --entrypoint id grafana/grafana:latest` | Không tạo user host `472`; tạo lại secret theo mục 8 trong thư mục mode `0700`, với file mode `0444` |
+| Đã thay secret nhưng mật khẩu Grafana không đổi | Kiểm tra volume Grafana có được khởi tạo trước khi thay secret không | Secret chỉ đặt mật khẩu lần đầu; reset admin hoặc khởi tạo lại Grafana theo mục 16.2 |
 | Nhiệt độ Apple SMC bất thường | `sensors` và file `.prom` | Xóa key khỏi allowlist, không xuất sensor thô chưa xác minh |
 | RPM khác kỳ vọng `mbpfan` | sysfs, `/etc/mbpfan.conf`, log `mbpfan` | Điều tra dịch vụ quạt riêng, không chỉnh từ dashboard |
 | Dữ liệu chiếm đĩa nhanh | Volume Docker và cờ retention | Xác nhận giới hạn `15d`/`2GB`, sao lưu trước khi can thiệp |
+
+## 19. Tham chiếu chính thức
+
+- [Cấu hình Grafana Docker bằng secret file](https://grafana.com/docs/grafana/latest/setup-grafana/configure-docker/)
+- [Docker Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/)
+- [Giới hạn UID/GID/mode của file secret trong Compose](https://docs.docker.com/reference/compose-file/services/#secrets)
