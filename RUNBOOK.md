@@ -404,8 +404,9 @@ dashboard **Cảm biến nhiệt độ iMac**.
 Dashboard cần hiển thị trạng thái collector, tuổi dữ liệu, nhiệt độ cao nhất,
 nhiệt độ trung bình, cấu hình `mbpfan`, tốc độ quạt và công suất GPU. Panel
 `Tất cả nhiệt độ hợp lệ` chỉ có một line CPU package, thêm line trung bình và
-line cấu hình nhiệt; panel CPU riêng vẫn có package cùng từng core. Gauge và
-line cấu hình phải phản ánh giá trị trong `/etc/mbpfan.conf`.
+không có line cấu hình `mbpfan`; panel CPU riêng vẫn có package cùng từng core.
+Gauge, panel cấu hình và line giới hạn quạt phải phản ánh giá trị trong
+`/etc/mbpfan.conf`.
 
 Khi chọn khoảng thời gian cũ trước lần triển khai collector mới, line CPU
 package và trung bình vẫn tính từ dữ liệu sensor đã lưu; line/panel cấu hình

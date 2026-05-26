@@ -502,7 +502,7 @@
             "properties": [
               {
                 "id": "unit",
-                "value": "rpm"
+                "value": "suffix: RPM"
               }
             ]
           }
@@ -573,7 +573,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "CPU chỉ hiện package làm đại diện; panel CPU riêng vẫn hiện từng core. Các line mbpfan chỉ tồn tại từ khi cấu hình bắt đầu được thu thập.",
+      "description": "CPU chỉ hiện package làm đại diện; panel CPU riêng vẫn hiện từng core. Đường trung bình toàn máy được nhấn mạnh để theo dõi mức nhiệt đại diện.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -587,7 +587,24 @@
           },
           "unit": "celsius"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "trung bình toàn máy"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 4
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 20
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -626,21 +643,6 @@
           "expr": "avg(thermal_temperature_celsius{component!=\"cpu\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
           "legendFormat": "trung bình toàn máy",
           "refId": "C"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"low\"}",
-          "legendFormat": "mbpfan / low",
-          "refId": "D"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
-          "legendFormat": "mbpfan / high",
-          "refId": "E"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
-          "legendFormat": "mbpfan / max",
-          "refId": "F"
         }
       ],
       "title": "Tất cả nhiệt độ hợp lệ",
@@ -874,5 +876,5 @@
   "timezone": "browser",
   "title": "Cảm biến nhiệt độ iMac",
   "uid": "imac-thermal",
-  "version": 1
+  "version": 2
 }
