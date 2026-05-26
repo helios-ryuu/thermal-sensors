@@ -1,6 +1,45 @@
 {
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(255, 193, 7, 0.12)",
+        "name": "Ban ngày (06:00-18:00)",
+        "target": {
+          "queryType": "timeRegions",
+          "refId": "Daytime",
+          "timeRegion": {
+            "from": "06:00",
+            "timezone": "browser",
+            "to": "18:00"
+          }
+        }
+      },
+      {
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(88, 116, 163, 0.18)",
+        "name": "Ban đêm (18:00-06:00)",
+        "target": {
+          "queryType": "timeRegions",
+          "refId": "Nighttime",
+          "timeRegion": {
+            "from": "18:00",
+            "timezone": "browser",
+            "to": "06:00"
+          }
+        }
+      }
+    ]
   },
   "editable": false,
   "graphTooltip": 1,
@@ -503,6 +542,13 @@
               {
                 "id": "unit",
                 "value": "suffix: RPM"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
               }
             ]
           }
@@ -601,6 +647,13 @@
               {
                 "id": "custom.fillOpacity",
                 "value": 20
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
               }
             ]
           }
@@ -876,5 +929,5 @@
   "timezone": "browser",
   "title": "Cảm biến nhiệt độ iMac",
   "uid": "imac-thermal",
-  "version": 2
+  "version": 3
 }
