@@ -76,6 +76,9 @@ Collector xuất các metric ổn định sau:
 | `thermal_gpu_power_watts{component,sensor}` | Công suất `PPT` của AMD GPU |
 | `thermal_collector_success` | `1` nếu lần đọc gần nhất thành công, `0` nếu lỗi |
 | `thermal_collector_timestamp_seconds` | Thời điểm collector thử đọc dữ liệu gần nhất |
+| `thermal_mbpfan_config_valid` | `1` nếu `/etc/mbpfan.conf` đọc được và có thứ tự giới hạn hợp lệ |
+| `thermal_mbpfan_temperature_threshold_celsius{threshold}` | Các mức `low`, `high`, `max` của `mbpfan` |
+| `thermal_mbpfan_fan_speed_limit_rpm{fan,limit}` | Giới hạn `min`/`max` RPM của quạt trong `mbpfan` |
 
 Output Apple SMC trên máy hiện có nhiều key mang giá trị sentinel hoặc không
 đáng tin, ví dụ `-127.0 C`, giá trị âm bất thường và các key chưa xác định ý
@@ -94,10 +97,15 @@ Prometheus được cấu hình lưu dữ liệu tối đa `15d` và `2GB`. Graf
 đăng nhập, tắt đăng ký người dùng mới và dùng mật khẩu admin tạo trong lúc cài
 đặt.
 
-Dashboard dùng ngưỡng quan sát tương ứng với `/etc/mbpfan.conf` hiện tại:
-`low_temp = 38`, `high_temp = 48`, `max_temp = 56`, và dải quạt
-`1600-2950 RPM`. Các ngưỡng màu này giúp đối chiếu hoạt động của `mbpfan`,
-không thay thế giới hạn an toàn phần cứng do driver báo cáo.
+Collector đọc read-only `/etc/mbpfan.conf`; dashboard dùng metric cấu hình để
+hiện các ngưỡng nhiệt và giới hạn quạt thực tế thay cho giá trị hard-code.
+Panel nhiệt độ tổng chỉ dùng CPU package làm đại diện CPU, trong khi panel CPU
+riêng vẫn hiện package và từng core. Đường `trung bình toàn máy` là trung bình
+của CPU package, GPU/PCH/NVMe và các nhiệt độ SMC đã allowlist đang có dữ liệu.
+
+Các truy vấn tổng hợp nhiệt độ tính được trên lịch sử sensor còn lưu trong
+Prometheus. Metric cấu hình không được backfill, nên mốc `mbpfan` chỉ xuất
+hiện kể từ lúc collector phiên bản mới bắt đầu ghi nhận cấu hình.
 
 Lưu ý cần kiểm tra trên máy thật: output `sensors` đã cung cấp báo dải quạt
 `1200-2850 RPM`, khác với giá trị ghi đè `1600-2950 RPM` trong `mbpfan.conf`.
@@ -117,6 +125,7 @@ Giải pháp giám sát không tự động thay đổi cấu hình quạt này.
 ## Yêu cầu
 
 - Ubuntu trên iMac đọc được dữ liệu bằng `sensors -j`.
+- User dịch vụ `helios` đọc được `/etc/mbpfan.conf` để xuất metric cấu hình.
 - Tài khoản triển khai là `helios`, có quyền `sudo`.
 - Docker Engine và Docker Compose plugin đã được cài đặt.
 - Tailscale đã hoạt động, và địa chỉ của máy là `100.120.64.5`.

@@ -11,6 +11,15 @@ import tempfile
 import time
 
 OUTPUT = "/var/lib/thermal-sensors/textfile/thermal_sensors.prom"
+MBPFAN_CONFIG = "/etc/mbpfan.conf"
+
+MBPFAN_REQUIRED_KEYS = {
+    "low_temp",
+    "high_temp",
+    "max_temp",
+    "min_fan1_speed",
+    "max_fan1_speed",
+}
 
 # Chỉ thêm key Apple SMC sau khi đã xác minh key đó ổn định trên đúng máy này.
 APPLE_TEMPERATURE_ALLOWLIST = {
@@ -31,6 +40,15 @@ def add_sample(lines, metric, value, component=None, sensor=None):
             prometheus_escape(component), prometheus_escape(sensor)
         )
     lines.append("{}{} {}".format(metric, labels, value))
+
+
+def add_labels_sample(lines, metric, value, labels):
+    """Thêm một mẫu metric với tập nhãn bất kỳ."""
+    rendered_labels = ",".join(
+        '{}="{}"'.format(name, prometheus_escape(label_value))
+        for name, label_value in labels.items()
+    )
+    lines.append("{}{{{}}} {}".format(metric, rendered_labels, value))
 
 
 def find_chip(data, prefix):
@@ -70,6 +88,68 @@ def add_nonnegative(lines, metric, component, sensor, value):
     """Chỉ xuất các giá trị tốc độ/công suất không âm."""
     if value is not None and value >= 0.0:
         add_sample(lines, metric, value, component, sensor)
+
+
+def parse_mbpfan_config(content):
+    """Đọc và kiểm tra các giới hạn cấu hình mbpfan cần quan sát."""
+    config = {}
+    for raw_line in content.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line or "=" not in line:
+            continue
+
+        key, raw_value = (piece.strip() for piece in line.split("=", 1))
+        if key not in MBPFAN_REQUIRED_KEYS:
+            continue
+
+        try:
+            value = float(raw_value)
+        except ValueError as error:
+            raise ValueError("Giá trị {} không phải số.".format(key)) from error
+        if not math.isfinite(value):
+            raise ValueError("Giá trị {} không hữu hạn.".format(key))
+        config[key] = value
+
+    missing = sorted(MBPFAN_REQUIRED_KEYS - set(config))
+    if missing:
+        raise ValueError("Thiếu cấu hình: {}.".format(", ".join(missing)))
+    if not config["low_temp"] <= config["high_temp"] <= config["max_temp"]:
+        raise ValueError("Thứ tự ngưỡng nhiệt độ mbpfan không hợp lệ.")
+    if not config["min_fan1_speed"] <= config["max_fan1_speed"]:
+        raise ValueError("Thứ tự giới hạn tốc độ quạt mbpfan không hợp lệ.")
+    return config
+
+
+def collect_mbpfan_config(lines, path=MBPFAN_CONFIG):
+    """Xuất cấu hình mbpfan khi file đọc được và có giá trị hợp lệ."""
+    try:
+        with open(path, "r", encoding="utf-8") as config_file:
+            config = parse_mbpfan_config(config_file.read())
+    except (OSError, ValueError) as error:
+        add_sample(lines, "thermal_mbpfan_config_valid", 0)
+        print("Đọc cấu hình mbpfan thất bại: {}".format(error), file=sys.stderr)
+        return False
+
+    add_sample(lines, "thermal_mbpfan_config_valid", 1)
+    for key, threshold in (
+        ("low_temp", "low"),
+        ("high_temp", "high"),
+        ("max_temp", "max"),
+    ):
+        add_labels_sample(
+            lines,
+            "thermal_mbpfan_temperature_threshold_celsius",
+            config[key],
+            {"threshold": threshold},
+        )
+    for key, limit in (("min_fan1_speed", "min"), ("max_fan1_speed", "max")):
+        add_labels_sample(
+            lines,
+            "thermal_mbpfan_fan_speed_limit_rpm",
+            config[key],
+            {"fan": "1", "limit": limit},
+        )
+    return True
 
 
 def collect_measurements(data, lines):
@@ -142,6 +222,12 @@ def main():
         "# TYPE thermal_collector_success gauge",
         "# HELP thermal_collector_timestamp_seconds Thời điểm Unix của lần thu thập gần nhất.",
         "# TYPE thermal_collector_timestamp_seconds gauge",
+        "# HELP thermal_mbpfan_config_valid Cấu hình mbpfan có đọc và kiểm tra hợp lệ hay không.",
+        "# TYPE thermal_mbpfan_config_valid gauge",
+        "# HELP thermal_mbpfan_temperature_threshold_celsius Các ngưỡng nhiệt độ trong cấu hình mbpfan.",
+        "# TYPE thermal_mbpfan_temperature_threshold_celsius gauge",
+        "# HELP thermal_mbpfan_fan_speed_limit_rpm Các giới hạn tốc độ quạt trong cấu hình mbpfan.",
+        "# TYPE thermal_mbpfan_fan_speed_limit_rpm gauge",
     ]
     exit_code = 0
     try:
@@ -172,6 +258,7 @@ def main():
         print("Thu thập cảm biến nhiệt độ thất bại: {}".format(error), file=sys.stderr)
         exit_code = 1
 
+    collect_mbpfan_config(lines, MBPFAN_CONFIG)
     write_atomic(lines)
     return exit_code
 

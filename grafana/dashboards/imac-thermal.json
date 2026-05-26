@@ -46,7 +46,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
+        "w": 4,
         "x": 0,
         "y": 0
       },
@@ -105,8 +105,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 5,
-        "x": 5,
+        "w": 4,
+        "x": 4,
         "y": 0
       },
       "id": 2,
@@ -138,7 +138,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Ngưỡng màu theo cấu hình mbpfan hiện tại: tăng quạt từ 48°C, chạy tối đa từ 56°C.",
+      "description": "Hotspot cao nhất trong mọi cảm biến hợp lệ, kể cả từng core CPU. Ngưỡng màu lấy từ cấu hình mbpfan đã thu thập.",
       "fieldConfig": {
         "defaults": {
           "max": 100,
@@ -152,11 +152,11 @@
               },
               {
                 "color": "yellow",
-                "value": 48
+                "value": null
               },
               {
                 "color": "red",
-                "value": 56
+                "value": null
               }
             ]
           },
@@ -166,8 +166,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 7,
-        "x": 10,
+        "w": 5,
+        "x": 8,
         "y": 0
       },
       "id": 3,
@@ -185,12 +185,59 @@
       "targets": [
         {
           "expr": "max(thermal_temperature_celsius)",
+          "format": "table",
           "instant": true,
           "legendFormat": "cao nhất",
           "refId": "A"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
         }
       ],
       "title": "Nhiệt độ cao nhất",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "Value #B",
+                "handlerKey": "threshold1"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "configRefId": "C",
+            "mappings": [
+              {
+                "fieldName": "Value #C",
+                "handlerKey": "threshold2"
+              }
+            ]
+          }
+        }
+      ],
       "type": "gauge"
     },
     {
@@ -198,12 +245,11 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "mbpfan đang cấu hình 1600 đến 2950 RPM; sensors từng báo tối đa 2850 RPM, cần xác minh riêng trên host.",
+      "description": "Trung bình các cảm biến đại diện hiện có: CPU package tính một lần, cùng GPU, PCH, NVMe và SMC đã cho phép. Không trung bình lặp các core CPU.",
       "fieldConfig": {
         "defaults": {
-          "decimals": 0,
-          "max": 2950,
-          "min": 1600,
+          "max": 100,
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -213,11 +259,109 @@
               },
               {
                 "color": "yellow",
-                "value": 2500
+                "value": null
               },
               {
                 "color": "red",
-                "value": 2850
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 13,
+        "y": 0
+      },
+      "id": 10,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "avg(thermal_temperature_celsius{component!=\"cpu\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "trung bình toàn máy",
+          "refId": "A"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Nhiệt độ trung bình",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "Value #B",
+                "handlerKey": "threshold1"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "configRefId": "C",
+            "mappings": [
+              {
+                "fieldName": "Value #C",
+                "handlerKey": "threshold2"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Thang đo RPM lấy trực tiếp từ giới hạn min/max trong cấu hình mbpfan hợp lệ đã thu thập.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
               }
             ]
           },
@@ -227,8 +371,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 7,
-        "x": 17,
+        "w": 6,
+        "x": 18,
         "y": 0
       },
       "id": 4,
@@ -246,12 +390,59 @@
       "targets": [
         {
           "expr": "thermal_fan_speed_rpm{component=\"fan\",sensor=\"main\"}",
+          "format": "table",
           "instant": true,
           "legendFormat": "quạt chính",
           "refId": "A"
+        },
+        {
+          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"min\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        },
+        {
+          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"max\"}",
+          "format": "table",
+          "instant": true,
+          "refId": "C"
         }
       ],
       "title": "Tốc độ quạt chính",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "Value #B",
+                "handlerKey": "min"
+              }
+            ]
+          }
+        },
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": {
+              "id": "byName",
+              "options": "Value #A"
+            },
+            "configRefId": "C",
+            "mappings": [
+              {
+                "fieldName": "Value #C",
+                "handlerKey": "max"
+              }
+            ]
+          }
+        }
+      ],
       "type": "gauge"
     },
     {
@@ -259,7 +450,130 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Vạch màu là ngưỡng điều khiển quạt mbpfan, không phải ngưỡng hỏng phần cứng.",
+      "description": "Giá trị được đọc từ /etc/mbpfan.conf; không có dữ liệu cho khoảng thời gian trước khi collector bắt đầu xuất metric cấu hình.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cấu hình hợp lệ"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "color": "red",
+                        "text": "Lỗi"
+                      },
+                      "1": {
+                        "color": "green",
+                        "text": "Tốt"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/^(nhiệt thấp|nhiệt cao|nhiệt tối đa)$/"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "celsius"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/^(quạt tối thiểu|quạt tối đa)$/"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "rpm"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "thermal_mbpfan_config_valid",
+          "instant": true,
+          "legendFormat": "cấu hình hợp lệ",
+          "refId": "A"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"low\"}",
+          "instant": true,
+          "legendFormat": "nhiệt thấp",
+          "refId": "B"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
+          "instant": true,
+          "legendFormat": "nhiệt cao",
+          "refId": "C"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
+          "instant": true,
+          "legendFormat": "nhiệt tối đa",
+          "refId": "D"
+        },
+        {
+          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"min\"}",
+          "instant": true,
+          "legendFormat": "quạt tối thiểu",
+          "refId": "E"
+        },
+        {
+          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"max\"}",
+          "instant": true,
+          "legendFormat": "quạt tối đa",
+          "refId": "F"
+        }
+      ],
+      "title": "Cấu hình mbpfan",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "CPU chỉ hiện package làm đại diện; panel CPU riêng vẫn hiện từng core. Các line mbpfan chỉ tồn tại từ khi cấu hình bắt đầu được thu thập.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -271,23 +585,6 @@
             "showPoints": "never",
             "spanNulls": false
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 48
-              },
-              {
-                "color": "red",
-                "value": 56
-              }
-            ]
-          },
           "unit": "celsius"
         },
         "overrides": []
@@ -296,7 +593,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 4
+        "y": 8
       },
       "id": 5,
       "options": {
@@ -316,9 +613,34 @@
       },
       "targets": [
         {
-          "expr": "thermal_temperature_celsius",
+          "expr": "thermal_temperature_celsius{component!=\"cpu\"}",
           "legendFormat": "{{component}} / {{sensor}}",
           "refId": "A"
+        },
+        {
+          "expr": "thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"}",
+          "legendFormat": "cpu / package",
+          "refId": "B"
+        },
+        {
+          "expr": "avg(thermal_temperature_celsius{component!=\"cpu\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
+          "legendFormat": "trung bình toàn máy",
+          "refId": "C"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"low\"}",
+          "legendFormat": "mbpfan / low",
+          "refId": "D"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
+          "legendFormat": "mbpfan / high",
+          "refId": "E"
+        },
+        {
+          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
+          "legendFormat": "mbpfan / max",
+          "refId": "F"
         }
       ],
       "title": "Tất cả nhiệt độ hợp lệ",
@@ -346,7 +668,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 16
       },
       "id": 6,
       "options": {
@@ -395,7 +717,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 16
       },
       "id": 7,
       "options": {
@@ -427,6 +749,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Line min/max lấy từ cấu hình mbpfan hợp lệ; khoảng trước khi metric cấu hình tồn tại chỉ có tốc độ quạt đo được.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -444,7 +767,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 24
       },
       "id": 8,
       "options": {
@@ -467,6 +790,16 @@
           "expr": "thermal_fan_speed_rpm",
           "legendFormat": "{{sensor}}",
           "refId": "A"
+        },
+        {
+          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"min\"}",
+          "legendFormat": "mbpfan / min",
+          "refId": "B"
+        },
+        {
+          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"max\"}",
+          "legendFormat": "mbpfan / max",
+          "refId": "C"
         }
       ],
       "title": "Lịch sử tốc độ quạt",
@@ -494,7 +827,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 24
       },
       "id": 9,
       "options": {
