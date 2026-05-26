@@ -79,8 +79,8 @@ Máy đang có `/etc/mbpfan.conf` với các giá trị vận hành sau:
 min_fan1_speed = 1600
 max_fan1_speed = 2950
 low_temp = 38
-high_temp = 48
-max_temp = 56
+high_temp = 46
+max_temp = 60
 polling_interval = 1
 ```
 
