@@ -1,0 +1,20 @@
+[Unit]
+Description=Khoi dong stack Docker Compose giam sat nhiet do sau khi Tailscale san sang
+Requires=docker.service
+Wants=network-online.target tailscaled.service
+After=docker.service network-online.target tailscaled.service
+StartLimitIntervalSec=10min
+StartLimitBurst=40
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/thermal-monitoring
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 90); do /usr/bin/tailscale ip -4 2>/dev/null | grep -qx "100.120.64.5" && exit 0; sleep 2; done; echo "Tailscale IP 100.120.64.5 chua san sang" >&2; exit 1'
+ExecStart=/usr/bin/docker compose up -d --pull never
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=4min
+
+[Install]
+WantedBy=multi-user.target

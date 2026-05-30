@@ -118,6 +118,7 @@ Giải pháp giám sát không tự động thay đổi cấu hình quạt này.
 | `compose.yaml` | Chạy ba container giám sát | `/opt/thermal-monitoring/compose.yaml` |
 | `collector/collect_sensors.py` | Chuyển `sensors -j` thành metric | `/opt/thermal-monitoring/collector/collect_sensors.py` |
 | `systemd/thermal-sensors.*` | Lập lịch collector mỗi 15 giây | `/etc/systemd/system/` |
+| `systemd/thermal-monitoring.service` | Chờ Tailscale rồi khởi động lại Compose sau reboot | `/etc/systemd/system/` |
 | `prometheus/prometheus.yml` | Scrape node_exporter | `/opt/thermal-monitoring/prometheus/` |
 | `grafana/provisioning/` | Tự tạo datasource/dashboard provider | `/opt/thermal-monitoring/grafana/provisioning/` |
 | `grafana/dashboards/imac-thermal.json` | Dashboard được nạp sẵn | `/opt/thermal-monitoring/grafana/dashboards/` |
@@ -149,7 +150,7 @@ Thực hiện lần lượt các mục trong [RUNBOOK.md](./RUNBOOK.md):
    nếu đã triển khai trước đó.
 2. Chạy kiểm tra preflight.
 3. Cài các tệp đã version hóa sang `/opt/thermal-monitoring` và bật
-   `systemd timer`.
+   `systemd timer` cùng service khởi động Compose sau Tailscale.
 4. Khởi động Docker Compose và kiểm thử metric/dashboard.
 5. Ghi nhận mật khẩu, quy trình cập nhật, sao lưu và gỡ bỏ.
 

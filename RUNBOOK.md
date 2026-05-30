@@ -22,6 +22,7 @@ xạ sang bản chạy như sau:
 | `collector/collect_sensors.py` | `/opt/thermal-monitoring/collector/collect_sensors.py` | Chuyển dữ liệu `sensors -j` thành metric |
 | `systemd/thermal-sensors.service` | `/etc/systemd/system/thermal-sensors.service` | Chạy collector một lần |
 | `systemd/thermal-sensors.timer` | `/etc/systemd/system/thermal-sensors.timer` | Chạy collector mỗi 15 giây |
+| `systemd/thermal-monitoring.service` | `/etc/systemd/system/thermal-monitoring.service` | Chờ Tailscale sẵn sàng rồi khởi động stack Compose sau reboot |
 | `prometheus/prometheus.yml` | `/opt/thermal-monitoring/prometheus/prometheus.yml` | Cho Prometheus thu thập metric |
 | `grafana/provisioning/datasources/prometheus.yml` | `/opt/thermal-monitoring/grafana/provisioning/datasources/prometheus.yml` | Tạo nguồn dữ liệu Grafana |
 | `grafana/provisioning/dashboards/thermal.yml` | `/opt/thermal-monitoring/grafana/provisioning/dashboards/thermal.yml` | Nạp dashboard từ tệp |
@@ -42,6 +43,11 @@ Vì vậy, các bước làm mới image ở mục 15 luôn đi kèm sao lưu, g
 `~/thermal-sensors` là bản có quản lý phiên bản từ GitHub.
 `/opt/thermal-monitoring` là bản được Docker Compose và `systemd` sử dụng.
 Bí mật, metric và volume runtime không nằm trong repository.
+
+`compose.yaml` khai báo project name cố định là `thermal-monitoring`. Nhờ đó
+container, network và volume giữ cùng nhãn Compose dù người vận hành đang đứng
+ở thư mục khác. Tuy vậy, thư mục chạy chuẩn vẫn là `/opt/thermal-monitoring`
+vì các bind mount và secret runtime được cài tại đó.
 
 ## 2. Clone hoặc cập nhật repository từ GitHub
 
@@ -341,12 +347,24 @@ docker compose config --images
 
 Danh sách image phải gồm đúng ba tag `latest` tại mục 1. Lưu ý:
 `docker compose pull` sẽ lấy image mà registry đang trỏ tới bằng tag `latest`
-tại thời điểm chạy. Với lần cài đầu tiên, nếu cấu hình đạt, khởi động stack:
+tại thời điểm chạy.
+
+Cài service hồi phục sau reboot. Service này chờ địa chỉ Tailscale
+`100.120.64.5` xuất hiện rồi chạy `docker compose up -d --pull never`, tránh
+trường hợp Docker start Grafana trước khi `tailscale0` có IP và container bị
+kẹt ở trạng thái `Exited`:
 
 ```bash
+REPO_DIR="$HOME/thermal-sensors"
+sudo install -m 0644 "$REPO_DIR/systemd/thermal-monitoring.service" \
+  /etc/systemd/system/thermal-monitoring.service
+sudo systemctl daemon-reload
+
+cd /opt/thermal-monitoring
 docker compose pull
-docker compose up -d
+sudo systemctl enable --now thermal-monitoring.service
 docker compose ps
+systemctl status thermal-monitoring.service --no-pager
 sudo ss -ltnp | grep -E ':(3000|9090)\b'
 docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
   thermal-node-exporter thermal-prometheus thermal-grafana \
@@ -466,6 +484,8 @@ Xem trạng thái và log:
 cd /opt/thermal-monitoring
 docker compose ps
 docker compose logs --tail=100 prometheus grafana node-exporter
+systemctl status thermal-monitoring.service --no-pager
+journalctl -u thermal-monitoring.service -n 50 --no-pager
 journalctl -u thermal-sensors.service -n 50 --no-pager
 ```
 
@@ -473,7 +493,7 @@ Khởi động lại các container giám sát, không tác động `mbpfan` hay
 
 ```bash
 cd /opt/thermal-monitoring
-docker compose restart
+sudo systemctl restart thermal-monitoring.service
 docker compose ps
 ```
 
@@ -523,10 +543,13 @@ sudo install -m 0644 "$REPO_DIR/systemd/thermal-sensors.service" \
   /etc/systemd/system/thermal-sensors.service
 sudo install -m 0644 "$REPO_DIR/systemd/thermal-sensors.timer" \
   /etc/systemd/system/thermal-sensors.timer
+sudo install -m 0644 "$REPO_DIR/systemd/thermal-monitoring.service" \
+  /etc/systemd/system/thermal-monitoring.service
 
 sudo systemctl daemon-reload
 sudo systemctl restart thermal-sensors.timer
 sudo systemctl start thermal-sensors.service
+sudo systemctl enable thermal-monitoring.service
 cd /opt/thermal-monitoring
 docker compose config --quiet
 docker compose up -d --pull never --force-recreate
@@ -702,6 +725,7 @@ Dừng stack và collector nhưng giữ dữ liệu để có thể phục hồi
 ```bash
 cd /opt/thermal-monitoring
 docker compose down
+sudo systemctl disable --now thermal-monitoring.service
 sudo systemctl disable --now thermal-sensors.timer
 ```
 
@@ -711,7 +735,9 @@ sudo systemctl disable --now thermal-sensors.timer
 ```bash
 cd /opt/thermal-monitoring
 docker compose down -v
+sudo systemctl disable --now thermal-monitoring.service
 sudo systemctl disable --now thermal-sensors.timer
+sudo rm -f /etc/systemd/system/thermal-monitoring.service
 sudo rm -f /etc/systemd/system/thermal-sensors.service
 sudo rm -f /etc/systemd/system/thermal-sensors.timer
 sudo systemctl daemon-reload
@@ -729,7 +755,9 @@ lại để tiếp tục theo dõi mã nguồn; việc xóa clone GitHub là tha
 | --- | --- | --- |
 | Dashboard không có dữ liệu | `thermal_collector_success`, `journalctl -u thermal-sensors.service` | Sửa lỗi đọc `sensors` hoặc quyền thư mục textfile, rồi chạy lại collector |
 | Target Prometheus down | `docker compose logs node-exporter prometheus` | Xác nhận file `.prom` và network Compose |
+| Grafana mất sau reboot, container `Exited (255)` | `docker inspect thermal-grafana`, `journalctl -u docker -b`, lỗi `cannot assign requested address` | Cài và enable `thermal-monitoring.service`, rồi chạy `sudo systemctl restart thermal-monitoring.service` sau khi Tailscale có IP |
 | Grafana không truy cập được từ tailnet | `tailscale ip -4`, `ss -ltnp`, log Grafana | Xác nhận IP binding và kết nối Tailscale |
+| Chạy `docker compose` trong `~/thermal-sensors` báo conflict container | `docker inspect ... com.docker.compose.project`, `docker compose ps` trong `/opt/thermal-monitoring` | Dùng `/opt/thermal-monitoring` làm thư mục vận hành; cập nhật `compose.yaml` có `name: thermal-monitoring` để tránh lệch project name |
 | `install: invalid user: '472'` khi tạo secret | Output `docker run --entrypoint id grafana/grafana:latest` | Không tạo user host `472`; tạo lại secret theo mục 8 trong thư mục mode `0700`, với file mode `0444` |
 | Đã thay secret nhưng mật khẩu Grafana không đổi | Kiểm tra volume Grafana có được khởi tạo trước khi thay secret không | Secret chỉ đặt mật khẩu lần đầu; reset admin hoặc khởi tạo lại Grafana theo mục 16.2 |
 | `thermal_mbpfan_config_valid` bằng `0` | Quyền đọc và nội dung `/etc/mbpfan.conf`, log collector | Khôi phục quyền đọc cho user dịch vụ hoặc sửa cấu hình tại quy trình quản trị `mbpfan`; không chạy collector bằng root |

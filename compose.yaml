@@ -1,3 +1,5 @@
+name: thermal-monitoring
+
 services:
   node-exporter:
     image: prom/node-exporter:latest
@@ -12,7 +14,7 @@ services:
       - monitoring
     read_only: true
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges=true
     restart: unless-stopped
 
   prometheus:
@@ -33,7 +35,7 @@ services:
     depends_on:
       - node-exporter
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges=true
     restart: unless-stopped
 
   grafana:
@@ -57,7 +59,7 @@ services:
     depends_on:
       - prometheus
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges=true
     restart: unless-stopped
 
 networks:
@@ -73,4 +75,3 @@ volumes:
 secrets:
   grafana_admin_password:
     file: ./secrets/grafana_admin_password.txt
-
