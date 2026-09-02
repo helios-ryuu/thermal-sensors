@@ -102,6 +102,34 @@ class MbpfanConfigTests(unittest.TestCase):
         )
         self.assertIn("thermal_mbpfan_config_valid 0", written_lines)
 
+    def test_ambient_estimation_with_ta0v(self):
+        sensor_json = {
+            "applesmc-isa-0300": {
+                "TA0V ": {"temp1_input": 28.0},
+                "TC0p": {"temp2_input": 42.0},
+                "TG0p": {"temp3_input": 45.0},
+            }
+        }
+        lines = []
+        collect_sensors.collect_measurements(sensor_json, lines)
+        self.assertIn('thermal_temperature_celsius{component="applesmc",sensor="air_intake"} 28.0', lines)
+        self.assertIn('thermal_temperature_celsius{component="applesmc",sensor="cpu_proximity"} 42.0', lines)
+        self.assertIn('thermal_temperature_celsius{component="applesmc",sensor="gpu_proximity"} 45.0', lines)
+        self.assertIn("thermal_estimated_ambient_temperature_celsius 27.2", lines)
+
+    def test_ambient_estimation_fallback_without_ta0v(self):
+        sensor_json = {
+            "applesmc-isa-0300": {
+                "TC0p": {"temp1_input": 40.0},
+                "TG0p": {"temp2_input": 48.0},
+                "TL0p": {"temp3_input": 32.0},
+            }
+        }
+        lines = []
+        collect_sensors.collect_measurements(sensor_json, lines)
+        # Min is 32.0, fallback ambient = 32.0 - 4.5 = 27.5
+        self.assertIn("thermal_estimated_ambient_temperature_celsius 27.5", lines)
+
     def write_config(self, content):
         temporary = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False)
         self.addCleanup(lambda: os.unlink(temporary.name))

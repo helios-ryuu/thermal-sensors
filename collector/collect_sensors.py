@@ -23,11 +23,11 @@ MBPFAN_REQUIRED_KEYS = {
     "max_fan1_speed",
 }
 
-# Chỉ thêm key Apple SMC sau khi đã xác minh key đó ổn định trên đúng máy này.
-# TA0V: air intake temperature — dùng để xấp xỉ nhiệt độ phòng (~TA0V - 1°C)
+# Cảm biến Apple SMC cho phép theo dõi (hỗ trợ case-insensitive)
 APPLE_TEMPERATURE_ALLOWLIST = {
     "TA0V": "air_intake",
-    # "TC0P": "cpu_proximity",
+    "TC0p": "cpu_proximity",
+    "TG0p": "gpu_proximity",
 }
 
 
@@ -64,9 +64,10 @@ def find_chip(data, prefix):
 
 
 def find_feature(chip, feature_name):
-    """Tìm feature, bỏ qua khoảng trắng cuối trong nhãn Apple SMC."""
+    """Tìm feature, bỏ qua khoảng trắng cuối và không phân biệt hoa thường."""
+    target = feature_name.strip().upper()
     for name, value in chip.items():
-        if name.strip() == feature_name and isinstance(value, dict):
+        if name.strip().upper() == target and isinstance(value, dict):
             return value
     return {}
 
@@ -202,6 +203,29 @@ def collect_measurements(data, lines):
             read_feature(apple, raw_sensor, ("_input",)),
         )
 
+    # Thuật toán tính nhiệt độ môi trường phòng ước tính (Ambient):
+    # - Nếu TA0V khả dụng (> 0): khi quạt chạy, luồng khí nạp rất sát nhiệt độ phòng -> Ambient = TA0V - 0.8°C
+    # - Fallback nếu mất TA0V: lấy min của các sensor Apple SMC trong dải [15°C - 60°C] trừ 4.5°C
+    air_intake = read_feature(apple, "TA0V", ("_input",))
+    if air_intake is not None and 0.0 < air_intake < 125.0:
+        ambient = round(air_intake - 0.8, 1)
+    else:
+        candidates = []
+        for fname, fval in apple.items():
+            if isinstance(fval, dict):
+                for k, v in fval.items():
+                    if k.endswith("_input") and isinstance(v, (int, float)):
+                        val = float(v)
+                        if 15.0 <= val <= 60.0:
+                            candidates.append(val)
+        if candidates:
+            ambient = round(min(candidates) - 4.5, 1)
+        else:
+            ambient = None
+
+    if ambient is not None and 0.0 <= ambient < 100.0:
+        add_sample(lines, "thermal_estimated_ambient_temperature_celsius", ambient)
+
 
 def write_atomic(lines, output_path=None):
     """Thay thế file metric nguyên tử để exporter không đọc file dở dang."""
@@ -251,6 +275,8 @@ def collect_once(output_path=None, config_path=None):
             [
                 "# HELP thermal_temperature_celsius Các giá trị nhiệt độ phần cứng đã chọn.",
                 "# TYPE thermal_temperature_celsius gauge",
+                "# HELP thermal_estimated_ambient_temperature_celsius Nhiệt độ môi trường phòng ước tính từ cảm biến iMac.",
+                "# TYPE thermal_estimated_ambient_temperature_celsius gauge",
                 "# HELP thermal_fan_speed_rpm Các giá trị tốc độ quạt đã chọn.",
                 "# TYPE thermal_fan_speed_rpm gauge",
                 "# HELP thermal_gpu_power_watts Các giá trị công suất GPU đã chọn.",

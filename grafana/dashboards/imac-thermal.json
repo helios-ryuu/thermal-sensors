@@ -111,7 +111,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "description": "Approximate room temperature from Apple SMC air intake sensor (TA0V). Formula: TA0V - 1°C.",
+      "description": "Approximate room temperature: TA0V - 0.8°C (Air Inlet with fan > 1500 RPM) with min-SMC fallback.",
       "fieldConfig": {
         "defaults": {
           "decimals": 1,
@@ -137,7 +137,7 @@
       },
       "targets": [
         {
-          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 1",
+          "expr": "thermal_estimated_ambient_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.8)",
           "instant": true,
           "legendFormat": "~room",
           "refId": "A"
@@ -407,7 +407,7 @@
           "refId": "C"
         },
         {
-          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 1",
+          "expr": "thermal_estimated_ambient_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.8)",
           "legendFormat": "~room",
           "refId": "D"
         }
