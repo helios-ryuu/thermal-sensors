@@ -92,8 +92,7 @@
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {
-          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
-          "unit": "short"
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}
         },
         "overrides": []
       },
@@ -103,7 +102,7 @@
         "colorMode": "value",
         "graphMode": "none",
         "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
-        "textMode": "auto"
+        "textMode": "name"
       },
       "targets": [
         {
