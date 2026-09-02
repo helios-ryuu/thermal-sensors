@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Xuất các giá trị lm-sensors đã chọn theo định dạng Prometheus textfile."""
 
+import argparse
 import json
 import math
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
 import time
 
-OUTPUT = "/var/lib/thermal-sensors/textfile/thermal_sensors.prom"
-MBPFAN_CONFIG = "/etc/mbpfan.conf"
+OUTPUT = os.environ.get("TEXTFILE_OUTPUT_PATH", "/textfile/thermal_sensors.prom")
+MBPFAN_CONFIG = os.environ.get("MBPFAN_CONFIG_PATH", "/etc/mbpfan.conf")
 
 MBPFAN_REQUIRED_KEYS = {
     "low_temp",
@@ -120,10 +122,11 @@ def parse_mbpfan_config(content):
     return config
 
 
-def collect_mbpfan_config(lines, path=MBPFAN_CONFIG):
+def collect_mbpfan_config(lines, path=None):
     """Xuất cấu hình mbpfan khi file đọc được và có giá trị hợp lệ."""
+    target_path = path or MBPFAN_CONFIG
     try:
-        with open(path, "r", encoding="utf-8") as config_file:
+        with open(target_path, "r", encoding="utf-8") as config_file:
             config = parse_mbpfan_config(config_file.read())
     except (OSError, ValueError) as error:
         add_sample(lines, "thermal_mbpfan_config_valid", 0)
@@ -198,9 +201,12 @@ def collect_measurements(data, lines):
         )
 
 
-def write_atomic(lines):
+def write_atomic(lines, output_path=None):
     """Thay thế file metric nguyên tử để exporter không đọc file dở dang."""
-    directory = os.path.dirname(OUTPUT)
+    target_path = output_path or OUTPUT
+    directory = os.path.dirname(target_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     fd, temporary_path = tempfile.mkstemp(prefix=".thermal_sensors.", dir=directory, text=True)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as output:
@@ -208,13 +214,13 @@ def write_atomic(lines):
             output.flush()
             os.fsync(output.fileno())
         os.chmod(temporary_path, 0o644)
-        os.replace(temporary_path, OUTPUT)
+        os.replace(temporary_path, target_path)
     finally:
         if os.path.exists(temporary_path):
             os.unlink(temporary_path)
 
 
-def main():
+def collect_once(output_path=None, config_path=None):
     """Thu thập một lần và luôn ghi trạng thái của lần thử gần nhất."""
     now = time.time()
     lines = [
@@ -258,10 +264,65 @@ def main():
         print("Thu thập cảm biến nhiệt độ thất bại: {}".format(error), file=sys.stderr)
         exit_code = 1
 
-    collect_mbpfan_config(lines, MBPFAN_CONFIG)
-    write_atomic(lines)
+    collect_mbpfan_config(lines, config_path or MBPFAN_CONFIG)
+    if output_path is not None:
+        write_atomic(lines, output_path)
+    else:
+        write_atomic(lines)
     return exit_code
 
 
+def main(argv=None):
+    """Hàm chạy chính hỗ trợ cả chạy một lần (oneshot) và chạy lặp (loop)."""
+    parser = argparse.ArgumentParser(description="Thermal sensors Prometheus textfile collector")
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Chạy liên tục theo chu kỳ",
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=int(os.environ.get("COLLECTOR_INTERVAL", "10")),
+        help="Chu kỳ thu thập tính bằng giây (mặc định: 10)",
+    )
+    parser.add_argument(
+        "--oneshot",
+        action="store_true",
+        help="Chỉ chạy một lần rồi thoát",
+    )
+    args = parser.parse_args(argv if argv is not None else [])
+
+    run_in_loop = (args.loop or "COLLECTOR_INTERVAL" in os.environ) and not args.oneshot
+
+    if not run_in_loop:
+        return collect_once()
+
+    stop = False
+
+    def handle_signal(signum, frame):
+        nonlocal stop
+        stop = True
+
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    interval = max(1, args.interval)
+    print("Bắt đầu collector chạy liên tục mỗi {}s...".format(interval), flush=True)
+
+    while not stop:
+        start_time = time.time()
+        collect_once()
+        elapsed = time.time() - start_time
+        sleep_time = max(0.1, interval - elapsed)
+
+        end_sleep = time.time() + sleep_time
+        while not stop and time.time() < end_sleep:
+            time.sleep(min(0.5, max(0.01, end_sleep - time.time())))
+
+    print("Collector đã dừng an toàn.", flush=True)
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

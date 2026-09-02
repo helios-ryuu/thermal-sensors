@@ -1,6 +1,24 @@
 name: thermal-monitoring
 
 services:
+  collector:
+    build:
+      context: ./collector
+      dockerfile: Dockerfile
+    image: thermal-collector:latest
+    container_name: thermal-collector
+    environment:
+      COLLECTOR_INTERVAL: ${COLLECTOR_INTERVAL:-10}
+      TEXTFILE_OUTPUT_PATH: /textfile/thermal_sensors.prom
+      MBPFAN_CONFIG_PATH: /etc/mbpfan.conf
+    volumes:
+      - /sys:/sys:ro
+      - ${MBPFAN_CONF_PATH:-/etc/mbpfan.conf}:/etc/mbpfan.conf:ro
+      - ${SENS_DATA_DIR:-./data}/textfile:/textfile
+    networks:
+      - monitoring
+    restart: unless-stopped
+
   node-exporter:
     image: prom/node-exporter:latest
     container_name: thermal-node-exporter
@@ -9,12 +27,14 @@ services:
       - --collector.textfile
       - --collector.textfile.directory=/textfile
     volumes:
-      - /var/lib/thermal-sensors/textfile:/textfile:ro
+      - ${SENS_DATA_DIR:-./data}/textfile:/textfile:ro
     networks:
       - monitoring
     read_only: true
     security_opt:
       - no-new-privileges=true
+    depends_on:
+      - collector
     restart: unless-stopped
 
   prometheus:
@@ -23,13 +43,13 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=15d
-      - --storage.tsdb.retention.size=2GB
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-2GB}
     ports:
-      - "127.0.0.1:9090:9090"
+      - "${PROMETHEUS_BIND_IP:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
+      - ${SENS_DATA_DIR:-./data}/prometheus:/prometheus
     networks:
       - monitoring
     depends_on:
@@ -42,16 +62,16 @@ services:
     image: grafana/grafana:latest
     container_name: thermal-grafana
     ports:
-      - "100.120.64.5:3000:3000"
+      - "${GRAFANA_BIND_IP:-100.120.64.5}:${GRAFANA_PORT:-3000}:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     secrets:
       - grafana_admin_password
     volumes:
-      - grafana-data:/var/lib/grafana
+      - ${SENS_DATA_DIR:-./data}/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
@@ -66,12 +86,6 @@ networks:
   monitoring:
     name: thermal-monitoring
 
-volumes:
-  prometheus-data:
-    name: thermal-monitoring-prometheus-data
-  grafana-data:
-    name: thermal-monitoring-grafana-data
-
 secrets:
   grafana_admin_password:
-    file: ./secrets/grafana_admin_password.txt
+    file: ${SENS_DATA_DIR:-./data}/secrets/grafana_admin_password.txt
