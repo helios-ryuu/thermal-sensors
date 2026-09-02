@@ -206,10 +206,35 @@ def collect_measurements(data, lines):
     # Thuật toán tính nhiệt độ môi trường phòng ước tính (Ambient):
     # - Nếu TA0V khả dụng (> 0): khi quạt chạy, luồng khí nạp rất sát nhiệt độ phòng -> Ambient = TA0V - 0.8°C
     # - Fallback nếu mất TA0V: lấy min của các sensor Apple SMC trong dải [15°C - 60°C] trừ 4.5°C
+    # --- THUẬT TOÁN ĐO NHIỆT ĐỘ PHÒNG ĐỘNG HỌC (DYNAMIC AMBIENT ESTIMATION) ---
     air_intake = read_feature(apple, "TA0V", ("_input",))
+    fan_speed = read_feature(apple, "Main", ("_input",))
+    cpu_pkg = read_feature(cpu, "Package id 0", ("_input",))
+
     if air_intake is not None and 0.0 < air_intake < 125.0:
         ambient = round(air_intake - 0.8, 1)
+        # 1. Tính độ lệch (offset) dựa trên tốc độ dòng khí qua quạt hút
+        if fan_speed is not None and fan_speed > 0:
+            if fan_speed >= 1800:
+                base_offset = 0.8   # Luồng khí nạp rất mạnh, áp suất âm cao
+            elif fan_speed >= 1400:
+                base_offset = 1.1   # Mức trung gian
+            elif fan_speed >= 1200:
+                base_offset = 1.4   # Quạt êm/mức sàn (1300 RPM): bù trừ nhiệt bức xạ
+            else:
+                base_offset = 1.8   # Quạt quay cực chậm hoặc dưới sàn
+        else:
+            base_offset = 1.4       # Fallback mặc định khi không đọc được fan
+
+        # 2. Bù trừ nhẹ nếu CPU sinh nhiệt lớn làm nóng khung nhôm (khi máy chịu tải)
+        cpu_leakage_penalty = 0.0
+        if cpu_pkg is not None and cpu_pkg > 50.0:
+            cpu_leakage_penalty = (cpu_pkg - 50.0) * 0.03  # +0.3°C mỗi khi CPU tăng thêm 10°C
+
+        total_offset = base_offset + cpu_leakage_penalty
+        ambient = round(air_intake - total_offset, 1)
     else:
+        # Fallback an toàn nếu mất cảm biến TA0V
         candidates = []
         for fname, fval in apple.items():
             if isinstance(fval, dict):

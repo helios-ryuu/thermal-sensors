@@ -112,6 +112,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "description": "Approximate room temperature: TA0V - 0.8°C (Air Inlet with fan > 1500 RPM) with min-SMC fallback.",
+      "description": "Approximate room temperature: dynamic thermal estimation from air intake (TA0V), fan speed, and CPU load compensation.",
       "fieldConfig": {
         "defaults": {
           "decimals": 1,
