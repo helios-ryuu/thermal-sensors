@@ -137,7 +137,7 @@
       },
       "targets": [
         {
-          "expr": "thermal_estimated_ambient_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.8)",
+          "expr": "thermal_estimated_ambient_temperature_celsius",
           "instant": true,
           "legendFormat": "~room",
           "refId": "A"
@@ -407,7 +407,7 @@
           "refId": "C"
         },
         {
-          "expr": "thermal_estimated_ambient_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.8)",
+          "expr": "thermal_estimated_ambient_temperature_celsius",
           "legendFormat": "~room",
           "refId": "D"
         }
