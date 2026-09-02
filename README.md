@@ -1,6 +1,6 @@
 # Giám sát nhiệt độ iMac bằng Grafana và Docker Compose (100% Containerized)
 
-Stack giám sát nhẹ cho Ubuntu trên iMac, hiển thị lịch sử nhiệt độ CPU, GPU, PCH, NVMe và tốc độ quạt từ `lm-sensors` trên Grafana.
+Stack giám sát nhẹ cho Ubuntu trên iMac, hiển thị lịch sử nhiệt độ CPU, GPU, PCH, NVMe và tốc độ quạt từ `lm-sensors` trên Grafana, tích hợp Cloudflare Tunnel để truy cập an toàn từ xa.
 
 Hệ thống được đóng gói **100% bằng Docker Compose**, không cần cài đặt các service hay timer systemd phức tạp trên host, dữ liệu được lưu trữ tập trung tại `~/.sens` (hoặc thư mục tùy chỉnh qua `.env`).
 
@@ -13,7 +13,7 @@ Host Hardware (/sys, /etc/mbpfan.conf)
        │ (read-only bind-mount)
        ▼
 ┌────────────────────────────────────────────────────────┐
-│ Docker Compose Network                                 │
+│ Docker Compose Network (thermal-monitoring)            │
 │                                                        │
 │  ┌──────────────────┐                                  │
 │  │ thermal-collector│ (Chạy mỗi 10 giây)               │
@@ -26,16 +26,21 @@ Host Hardware (/sys, /etc/mbpfan.conf)
 │                                        │               │
 │                                        ▼               │
 │                            ┌────────────────────────┐  │
-│                            │        grafana         │  │
-│                            └────────────────────────┘  │
-└────────────────────────────────────────────────────────┘
+│                            │    thermal-grafana     │◄─┼──┐
+│                            └────────────────────────┘  │  │
+│                                                        │  │
+│  ┌────────────────────┐                                │  │
+│  │ cloudflared_tunnel │────────────────────────────────┘  │
+│  └────────┬───────────┘ (Cloudflare Tunnel)               │
+└───────────┼───────────────────────────────────────────────┘
+            ▼
+    Internet / Zero Trust
 ```
 
 * **Dữ liệu tập trung (`~/.sens/`)**:
   * `~/.sens/textfile/`: Chứa file metric trung gian `thermal_sensors.prom`.
   * `~/.sens/prometheus/`: Cơ sở dữ liệu time-series TSDB của Prometheus.
   * `~/.sens/grafana/`: Dữ liệu SQLite và cấu hình của Grafana.
-  * `~/.sens/secrets/`: Mật khẩu đăng nhập Admin Grafana.
 
 ---
 
@@ -46,25 +51,32 @@ Host Hardware (/sys, /etc/mbpfan.conf)
 ./scripts/cleanup-legacy.sh
 ```
 
-### 2. Khởi tạo và chạy stack (1-Click)
-```bash
-./scripts/setup.sh
-```
-* Script sẽ tự tạo file `.env`, chuẩn bị thư mục `~/.sens`, tự sinh mật khẩu admin Grafana và bật toàn bộ container.
-* Dashboard Grafana: `http://100.120.64.5:3000` (hoặc IP Tailscale cấu hình trong `.env`).
+### 2. Cấu hình & Khởi tạo stack (1-Click)
+1. Tạo file `.env` từ `.env.example` và điền `TUNNEL_TOKEN`, `GRAFANA_ADMIN_PASSWORD`:
+   ```bash
+   cp .env.example .env
+   nano .env
+   ```
+2. Chạy setup:
+   ```bash
+   ./scripts/setup.sh
+   ```
+* Dashboard Grafana Cục bộ/Tailscale: `http://<GRAFANA_BIND_IP>:<GRAFANA_PORT>` (hoặc IP cấu hình trong `.env`).
+* Dashboard Grafana Cloudflare: Tự động kết nối qua Cloudflare Tunnel (`cloudflared_tunnel`).
 * Prometheus: `http://127.0.0.1:9090`.
 
 ---
 
 ## ⚙️ Cấu hình tùy chỉnh (.env)
 
-Tất cả cấu hình có thể tùy chỉnh dễ dàng qua file `.env`:
-
 | Biến môi trường | Mặc định | Ý nghĩa |
 | --- | --- | --- |
-| `SENS_DATA_DIR` | `/home/user/.sens` | Thư mục lưu trữ tập trung toàn bộ dữ liệu & bí mật |
-| `GRAFANA_BIND_IP` | `100.120.64.5` | IP publish của Grafana (khuyến nghị Tailscale IP) |
-| `GRAFANA_PORT` | `3000` | Port truy cập Grafana |
+| `SENS_DATA_DIR` | `/home/user/.sens` | Thư mục lưu trữ tập trung dữ liệu |
+| `GRAFANA_ADMIN_USER` | `admin` | Tên đăng nhập Admin Grafana |
+| `GRAFANA_ADMIN_PASSWORD` | `...` | Mật khẩu Admin Grafana (cấu hình trong `.env`) |
+| `TUNNEL_TOKEN` | `...` | Token Cloudflare Tunnel (lấy từ Cloudflare Zero Trust) |
+| `GRAFANA_BIND_IP` | `<GRAFANA_BIND_IP>` | IP publish của Grafana (Tailscale IP hoặc 127.0.0.1) |
+| `GRAFANA_PORT` | `<GRAFANA_PORT>` | Port truy cập Grafana |
 | `PROMETHEUS_BIND_IP`| `127.0.0.1` | IP publish của Prometheus |
 | `PROMETHEUS_PORT` | `9090` | Port truy cập Prometheus |
 | `COLLECTOR_INTERVAL`| `10` | Chu kỳ thu thập cảm biến của collector (giây) |
@@ -78,7 +90,7 @@ Tất cả cấu hình có thể tùy chỉnh dễ dàng qua file `.env`:
 * **Xem trạng thái / log:**
   ```bash
   docker compose ps
-  docker compose logs -f collector
+  docker compose logs -f cloudflared
   ```
 
 * **Dừng stack:**

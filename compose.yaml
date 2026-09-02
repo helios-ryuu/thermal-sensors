@@ -65,11 +65,9 @@ services:
       - "${GRAFANA_BIND_IP:-100.120.64.5}:${GRAFANA_PORT:-3000}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
-    secrets:
-      - grafana_admin_password
     volumes:
       - ${SENS_DATA_DIR:-./data}/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -82,10 +80,18 @@ services:
       - no-new-privileges=true
     restart: unless-stopped
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared_tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN is required}
+    networks:
+      - monitoring
+    depends_on:
+      - grafana
+
 networks:
   monitoring:
     name: thermal-monitoring
-
-secrets:
-  grafana_admin_password:
-    file: ${SENS_DATA_DIR:-./data}/secrets/grafana_admin_password.txt
