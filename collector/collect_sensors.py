@@ -203,16 +203,12 @@ def collect_measurements(data, lines):
             read_feature(apple, raw_sensor, ("_input",)),
         )
 
-    # Thuật toán tính nhiệt độ môi trường phòng ước tính (Ambient):
-    # - Nếu TA0V khả dụng (> 0): khi quạt chạy, luồng khí nạp rất sát nhiệt độ phòng -> Ambient = TA0V - 0.8°C
-    # - Fallback nếu mất TA0V: lấy min của các sensor Apple SMC trong dải [15°C - 60°C] trừ 4.5°C
     # --- THUẬT TOÁN ĐO NHIỆT ĐỘ PHÒNG ĐỘNG HỌC (DYNAMIC AMBIENT ESTIMATION) ---
     air_intake = read_feature(apple, "TA0V", ("_input",))
     fan_speed = read_feature(apple, "Main", ("_input",))
     cpu_pkg = read_feature(cpu, "Package id 0", ("_input",))
 
     if air_intake is not None and 0.0 < air_intake < 125.0:
-        ambient = round(air_intake - 0.8, 1)
         # 1. Tính độ lệch (offset) dựa trên tốc độ dòng khí qua quạt hút
         if fan_speed is not None and fan_speed > 0:
             if fan_speed >= 1800:

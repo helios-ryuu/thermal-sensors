@@ -127,7 +127,6 @@ max_temp = 78
                 "TA0V ": {"temp1_input": 28.0},
                 "TC0p": {"temp2_input": 42.0},
                 "TG0p": {"temp3_input": 45.0},
-            }
             },
         }
         lines = []
