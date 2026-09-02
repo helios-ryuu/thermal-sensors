@@ -1,6 +1,6 @@
-# Runbook: Giám sát phần cứng và hệ thống iMac (100% Docker Compose & Cloudflare Tunnel)
+# Runbook: Giám sát phần cứng và hệ thống iMac (100% Docker Compose & Tailscale)
 
-Tài liệu hướng dẫn vận hành, kiểm thử, bảo trì và xử lý sự cố cho stack giám sát nhiệt độ và tài nguyên hệ thống iMac.
+Tài liệu hướng dẫn vận hành, kiểm thử, bảo trì và xử lý sự cố cho stack giám sát nhiệt độ và tài nguyên hệ thống iMac qua mạng Tailscale.
 
 ---
 
@@ -26,21 +26,18 @@ Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
 │  └──────────────────┘                  │               │
 │                                        ▼               │
 │                            ┌────────────────────────┐  │
-│                            │    thermal-grafana     │◄─┼──┐
-│                            └────────────────────────┘  │  │
-│                                                        │  │
-│  ┌────────────────────┐                                │  │
-│  │ cloudflared_tunnel │────────────────────────────────┘  │
-│  └────────┬───────────┘ (Cloudflare Tunnel)               │
-└───────────┼───────────────────────────────────────────────┘
-            ▼
-    Internet / Zero Trust
+│                            │    thermal-grafana     │  │
+│                            └───────────┬────────────┘  │
+└────────────────────────────────────────┼───────────────┘
+                                         ▼
+                               Tailscale Network
+                               (<TAILSCALE_IP>:3000)
 ```
 
 ### Các tệp trong dự án:
 | Tệp / Thư mục | Vai trò |
 | --- | --- |
-| `compose.yaml` | Khai báo 5 container (collector, node-exporter, prometheus, grafana, cloudflared) |
+| `compose.yaml` | Khai báo 4 container (collector, node-exporter, prometheus, grafana) |
 | `collector/Dockerfile` | Image collector (Alpine + Python 3 + `lm-sensors`) |
 | `collector/collect_sensors.py` | Script thu thập cảm biến phần cứng (kèm TA0V ~room temp) và `mbpfan` |
 | `prometheus/prometheus.yml` | Cấu hình scrape node-exporter mỗi 10s |
@@ -48,7 +45,7 @@ Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
 | `grafana/dashboards/imac-thermal.json` | Dashboard 1: Cảm biến nhiệt độ iMac |
 | `grafana/dashboards/system-resources.json` | Dashboard 2: Tài nguyên hệ thống (CPU, RAM, Disk, Net) |
 | `grafana/dashboards/system-health.json` | Dashboard 3: Sức khỏe hệ thống (TCP, Uptime, Inode, FS) |
-| `.env.example` | Mẫu biến môi trường cấu hình IP, port, credentials, Cloudflare Tunnel token |
+| `.env.example` | Mẫu biến môi trường cấu hình IP, port, credentials |
 | `scripts/setup.sh` | Script 1-click khởi tạo thư mục `~/.sens` và chạy stack |
 | `scripts/clean.sh` | Script dừng stack hoặc xóa sạch dữ liệu (`--purge`) |
 | `scripts/cleanup-legacy.sh` | Script dọn dẹp các tệp/service của phiên bản cũ trên host |
@@ -70,9 +67,9 @@ Nếu hệ thống đã từng triển khai phiên bản cũ (dùng `/opt/therma
 1. Chuẩn bị file `.env`:
    ```bash
    cp .env.example .env
-   vim .env
+   nano .env
    ```
-   Chỉnh sửa các giá trị `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`, và `TUNNEL_TOKEN`.
+   Chỉnh sửa các giá trị `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` nếu cần.
 
 2. Chạy setup:
    ```bash
@@ -81,7 +78,7 @@ Nếu hệ thống đã từng triển khai phiên bản cũ (dùng `/opt/therma
 
 Script sẽ tự động:
 1. Tạo thư mục `~/.sens/{textfile,prometheus,grafana}` với quyền ghi phù hợp.
-2. Build image collector và chạy toàn bộ 5 container trong Docker Compose.
+2. Build image collector và chạy toàn bộ 4 container trong Docker Compose.
 
 ---
 
@@ -91,20 +88,16 @@ Script sẽ tự động:
 ```bash
 docker compose ps
 ```
-Cả 5 container (`thermal-collector`, `thermal-node-exporter`, `thermal-prometheus`, `thermal-grafana`, `cloudflared_tunnel`) phải ở trạng thái `Up`.
+Cả 4 container (`thermal-collector`, `thermal-node-exporter`, `thermal-prometheus`, `thermal-grafana`) phải ở trạng thái `Up`.
 
-### 4.2. Kiểm tra Collector Log & Cloudflare Tunnel
+### 4.2. Kiểm tra Collector Log
 ```bash
 # Xem log collector
 docker compose logs --tail 20 collector
-
-# Xem log Cloudflare Tunnel
-docker compose logs --tail 20 cloudflared
 ```
 
 ### 4.3. Truy cập Grafana
-- **Qua Cloudflare Tunnel**: Truy cập domain/hostname đã gán trên Cloudflare Zero Trust (trỏ tới Service `http://grafana:3000` hoặc `http://thermal-grafana:3000`).
-- **Qua Mạng Tailscale / Cục bộ**: Mở `http://100.120.64.5:3000` (hoặc IP cấu hình trong `.env`).
+- **Qua Mạng Tailscale**: Mở `http://<TAILSCALE_IP>:3000` (hoặc IP Tailscale cấu hình trong `.env`).
 - Đăng nhập với User và Password đã thiết lập trong file `.env`.
 - Mở thư mục **Giám sát hệ thống** để xem 3 dashboards:
   1. *Cảm biến nhiệt độ iMac*
@@ -117,7 +110,7 @@ docker compose logs --tail 20 cloudflared
 
 ### 5.1. Xem logs
 ```bash
-docker compose logs -f [collector|prometheus|grafana|cloudflared]
+docker compose logs -f [collector|prometheus|grafana|node-exporter]
 ```
 
 ### 5.2. Khởi động lại hoặc cập nhật

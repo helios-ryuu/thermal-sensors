@@ -84,18 +84,6 @@ services:
       - no-new-privileges=true
     restart: unless-stopped
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared_tunnel
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN is required}
-    networks:
-      - monitoring
-    depends_on:
-      - grafana
-
 networks:
   monitoring:
     name: thermal-monitoring

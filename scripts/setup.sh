@@ -42,13 +42,6 @@ if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ] || [ "${GRAFANA_ADMIN_PASSWORD}" = "chan
     echo "    Bạn nên đổi mật khẩu an toàn trong file .env."
 fi
 
-if [ -z "${TUNNEL_TOKEN:-}" ] || [ "${TUNNEL_TOKEN}" = "your_cloudflare_tunnel_token_here" ]; then
-    echo ""
-    echo "⚠️  LƯU Ý: TUNNEL_TOKEN chưa được cấu hình trong file .env."
-    echo "    Container 'cloudflared_tunnel' sẽ yêu cầu TUNNEL_TOKEN hợp lệ để kết nối."
-    echo ""
-fi
-
 # 4. Build và khởi động Docker Compose
 echo "[+] Đang build collector và khởi động Docker Compose..."
 docker compose build collector
@@ -58,10 +51,10 @@ echo ""
 echo "======================================================"
 echo "              ✅ TRIỂN KHAI THÀNH CÔNG!              "
 echo "======================================================"
-echo "Grafana Dashboard : http://${GRAFANA_BIND_IP:-100.120.64.5}:${GRAFANA_PORT:-3000}"
+echo "Grafana Dashboard : http://${GRAFANA_BIND_IP:-${TAILSCALE_IP}}:${GRAFANA_PORT:-3000}"
+echo "Truy cập qua mạng : Tailscale (${GRAFANA_BIND_IP:-${TAILSCALE_IP}}:${GRAFANA_PORT:-3000})"
 echo "User đăng nhập    : ${GRAFANA_ADMIN_USER:-admin}"
 echo "Mật khẩu Admin    : [Được cấu hình trong file .env]"
 echo "Prometheus Metric : http://${PROMETHEUS_BIND_IP:-127.0.0.1}:${PROMETHEUS_PORT:-9090}"
 echo "Dữ liệu lưu tại   : ${SENS_DATA_DIR}"
-echo "Cloudflare Tunnel : Đang chạy với container 'cloudflared_tunnel'"
 echo "======================================================"
