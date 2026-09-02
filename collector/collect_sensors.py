@@ -213,22 +213,22 @@ def collect_measurements(data, lines):
         # 1. Độ lệch cơ sở dựa trên lưu lượng gió quạt
         if fan_speed is not None and fan_speed > 0:
             if fan_speed >= 1800:
-                base_offset = 0.8   # Áp suất âm mạnh, gió lưu thông nhanh
+                base_offset = 0.7   # Áp suất âm mạnh, gió lưu thông nhanh
             elif fan_speed >= 1400:
-                base_offset = 1.1   # Mức trung bình
+                base_offset = 1   # Mức trung bình
             elif fan_speed >= 1200:
-                base_offset = 1.3   # Mức sàn vận hành êm (1300 RPM)
+                base_offset = 1.2   # Mức sàn vận hành êm (1300 RPM)
             else:
-                base_offset = 1.6   # Quạt dưới sàn hoặc tắt
+                base_offset = 1.4   # Quạt dưới sàn hoặc tắt
         else:
-            base_offset = 1.3
+            base_offset = 1.2
 
         # 2. Bù trừ nhiệt dẫn qua khung nhôm (Thermal Conduction Penalty)
         leakage_penalty = 0.0
         
         # Bù trừ CPU: bắt đầu tính khi CPU > 48°C
         if cpu_pkg is not None and cpu_pkg > 48.0:
-            leakage_penalty += (cpu_pkg - 48.0) * 0.025
+            leakage_penalty += (cpu_pkg - 48.0) * 0.02
             
         # Bù trừ GPU: nếu GPU nóng hơn mức bình thường (> 50°C)
         if gpu_temp is not None and gpu_temp > 50.0:
