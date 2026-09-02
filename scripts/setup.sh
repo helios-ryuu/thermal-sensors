@@ -24,6 +24,9 @@ set +a
 
 # Mở rộng dấu ~ hoặc biến ${HOME} trong SENS_DATA_DIR nếu có
 SENS_DATA_DIR="${SENS_DATA_DIR/#\~/$HOME}"
+if [ "${SENS_DATA_DIR}" = "/home/user/.sens" ] && [ ! -d "/home/user/.sens" ]; then
+    SENS_DATA_DIR="${HOME}/.sens"
+fi
 SENS_DATA_DIR="${SENS_DATA_DIR:-${HOME}/.sens}"
 
 echo "[+] Thư mục lưu trữ dữ liệu: ${SENS_DATA_DIR}"

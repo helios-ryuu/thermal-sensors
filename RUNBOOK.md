@@ -47,6 +47,7 @@ Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
 | `grafana/dashboards/system-health.json` | Dashboard 3: Sức khỏe hệ thống (TCP, Uptime, Inode, FS) |
 | `.env.example` | Mẫu biến môi trường cấu hình IP, port, credentials |
 | `scripts/setup.sh` | Script 1-click khởi tạo thư mục `~/.sens` và chạy stack |
+| `scripts/info.sh` | Script in thông tin kết nối và metadata dữ liệu / dung lượng |
 | `scripts/clean.sh` | Script dừng stack hoặc xóa sạch dữ liệu (`--purge`) |
 | `scripts/cleanup-legacy.sh` | Script dọn dẹp các tệp/service của phiên bản cũ trên host |
 
