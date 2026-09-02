@@ -203,31 +203,41 @@ def collect_measurements(data, lines):
             read_feature(apple, raw_sensor, ("_input",)),
         )
 
-    # --- THUẬT TOÁN ĐO NHIỆT ĐỘ PHÒNG ĐỘNG HỌC (DYNAMIC AMBIENT ESTIMATION) ---
+# --- THUẬT TOÁN ĐO NHIỆT ĐỘ PHÒNG ĐỘNG HỌC (DYNAMIC AMBIENT ESTIMATION) ---
     air_intake = read_feature(apple, "TA0V", ("_input",))
     fan_speed = read_feature(apple, "Main", ("_input",))
     cpu_pkg = read_feature(cpu, "Package id 0", ("_input",))
+    gpu_temp = read_feature(gpu, "edge", ("_input",))
 
     if air_intake is not None and 0.0 < air_intake < 125.0:
-        # 1. Tính độ lệch (offset) dựa trên tốc độ dòng khí qua quạt hút
+        # 1. Độ lệch cơ sở dựa trên lưu lượng gió quạt
         if fan_speed is not None and fan_speed > 0:
             if fan_speed >= 1800:
-                base_offset = 0.8   # Luồng khí nạp rất mạnh, áp suất âm cao
+                base_offset = 0.8   # Áp suất âm mạnh, gió lưu thông nhanh
             elif fan_speed >= 1400:
-                base_offset = 1.1   # Mức trung gian
+                base_offset = 1.1   # Mức trung bình
             elif fan_speed >= 1200:
-                base_offset = 1.4   # Quạt êm/mức sàn (1300 RPM): bù trừ nhiệt bức xạ
+                base_offset = 1.3   # Mức sàn vận hành êm (1300 RPM)
             else:
-                base_offset = 1.8   # Quạt quay cực chậm hoặc dưới sàn
+                base_offset = 1.6   # Quạt dưới sàn hoặc tắt
         else:
-            base_offset = 1.4       # Fallback mặc định khi không đọc được fan
+            base_offset = 1.3
 
-        # 2. Bù trừ nhẹ nếu CPU sinh nhiệt lớn làm nóng khung nhôm (khi máy chịu tải)
-        cpu_leakage_penalty = 0.0
-        if cpu_pkg is not None and cpu_pkg > 50.0:
-            cpu_leakage_penalty = (cpu_pkg - 50.0) * 0.03  # +0.3°C mỗi khi CPU tăng thêm 10°C
+        # 2. Bù trừ nhiệt dẫn qua khung nhôm (Thermal Conduction Penalty)
+        leakage_penalty = 0.0
+        
+        # Bù trừ CPU: bắt đầu tính khi CPU > 48°C
+        if cpu_pkg is not None and cpu_pkg > 48.0:
+            leakage_penalty += (cpu_pkg - 48.0) * 0.025
+            
+        # Bù trừ GPU: nếu GPU nóng hơn mức bình thường (> 50°C)
+        if gpu_temp is not None and gpu_temp > 50.0:
+            leakage_penalty += (gpu_temp - 50.0) * 0.02
 
-        total_offset = base_offset + cpu_leakage_penalty
+        # Đặt trần chặn trên (Clamping) để tránh offset quá đà làm tụt nhiệt ảo
+        clamped_penalty = min(leakage_penalty, 1.2)
+
+        total_offset = base_offset + clamped_penalty
         ambient = round(air_intake - total_offset, 1)
     else:
         # Fallback an toàn nếu mất cảm biến TA0V
@@ -246,7 +256,6 @@ def collect_measurements(data, lines):
 
     if ambient is not None and 0.0 <= ambient < 100.0:
         add_sample(lines, "thermal_estimated_ambient_temperature_celsius", ambient)
-
 
 def write_atomic(lines, output_path=None):
     """Thay thế file metric nguyên tử để exporter không đọc file dở dang."""
