@@ -45,6 +45,17 @@ echo "Prometheus Metric : http://${PROM_IP}:${PROM_P}"
 echo "Dữ liệu lưu tại   : ${SENS_DATA_DIR}"
 echo "======================================================"
 
+get_dir_size() {
+    local target="$1"
+    if [ -d "$target" ]; then
+        local size
+        size=$( (du -sh "$target" 2>/dev/null || true) | awk '{print $1; exit}' )
+        echo "${size:-N/A}"
+    else
+        echo "N/A"
+    fi
+}
+
 # ======================================================
 # METADATA DỮ LIỆU & DUNG LƯỢNG LƯU TRỮ
 # ======================================================
@@ -52,10 +63,10 @@ echo ""
 echo "📊 METADATA DỮ LIỆU & LƯU TRỮ:"
 echo "------------------------------------------------------"
 if [ -d "${SENS_DATA_DIR}" ]; then
-    TOTAL_DISK=$(du -sh "${SENS_DATA_DIR}" 2>/dev/null | cut -f1 || echo "N/A")
-    PROM_DISK=$(du -sh "${SENS_DATA_DIR}/prometheus" 2>/dev/null | cut -f1 || echo "N/A")
-    GRAF_DISK=$(du -sh "${SENS_DATA_DIR}/grafana" 2>/dev/null | cut -f1 || echo "N/A")
-    TEXT_DISK=$(du -sh "${SENS_DATA_DIR}/textfile" 2>/dev/null | cut -f1 || echo "N/A")
+    TOTAL_DISK=$(get_dir_size "${SENS_DATA_DIR}")
+    PROM_DISK=$(get_dir_size "${SENS_DATA_DIR}/prometheus")
+    GRAF_DISK=$(get_dir_size "${SENS_DATA_DIR}/grafana")
+    TEXT_DISK=$(get_dir_size "${SENS_DATA_DIR}/textfile")
 
     echo "  • Tổng dung lượng lưu trữ : ${TOTAL_DISK}"
     echo "  • Prometheus TSDB (15d)   : ${PROM_DISK}"
@@ -78,7 +89,7 @@ if [ -f "${PROM_FILE}" ]; then
     AMBIENT=$(grep '^thermal_estimated_ambient_temperature_celsius' "${PROM_FILE}" 2>/dev/null | awk '{print $2}' || true)
     CPU_PKG=$(grep '^thermal_temperature_celsius{component="cpu",sensor="package"}' "${PROM_FILE}" 2>/dev/null | awk '{print $2}' || true)
     GPU_EDGE=$(grep '^thermal_temperature_celsius{component="gpu",sensor="edge"}' "${PROM_FILE}" 2>/dev/null | awk '{print $2}' || true)
-    FAN_RPM=$(grep '^thermal_fan_speed_rpm' "${PROM_FILE}" 2>/dev/null | awk '{print $2}' || true)
+    FAN_RPM=$(grep '^thermal_fan_speed_rpm' "${PROM_FILE}" 2>/dev/null | awk '{printf "%.0f\n", $2}' || true)
     
     [ -n "${AMBIENT}" ] && echo "  • Nhiệt độ phòng (~Ambient): ${AMBIENT} °C"
     [ -n "${CPU_PKG}" ] && echo "  • CPU Package              : ${CPU_PKG} °C"

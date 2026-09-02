@@ -85,7 +85,6 @@ Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
 
 ## 🛠️ Quản lý & Dọn dẹp
 
-* **Xem trạng thái / log:**
 * **Xem thông tin truy cập & metadata dữ liệu:**
   ```bash
   ./scripts/info.sh
