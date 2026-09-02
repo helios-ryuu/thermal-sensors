@@ -1,0 +1,338 @@
+{
+  "editable": false,
+  "graphTooltip": 1,
+  "links": [
+    {
+      "title": "Cảm biến nhiệt độ iMac",
+      "type": "dashboard",
+      "url": "/d/imac-thermal"
+    },
+    {
+      "title": "Tài nguyên hệ thống",
+      "type": "dashboard",
+      "url": "/d/system-resources"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {"expr": "node_time_seconds - node_boot_time_seconds", "instant": true, "legendFormat": "uptime", "refId": "A"}
+      ],
+      "title": "System Uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "count(count(node_cpu_seconds_total) by (cpu))",
+          "instant": true,
+          "legendFormat": "CPU cores",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Cores",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {"expr": "node_memory_MemTotal_bytes", "instant": true, "legendFormat": "total RAM", "refId": "A"}
+      ],
+      "title": "Total Memory",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "node_uname_info",
+          "instant": true,
+          "legendFormat": "{{release}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Kernel Version",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 4},
+      "id": 100,
+      "title": "TCP & Network Health",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Number of TCP connections in each state over time.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never"},
+          "unit": "short"
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "ESTABLISHED"}, "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "TIME_WAIT"}, "properties": [{"id": "color", "value": {"fixedColor": "yellow", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "CLOSE_WAIT"}, "properties": [{"id": "color", "value": {"fixedColor": "orange", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "SYN_SENT"}, "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 14, "x": 0, "y": 5},
+      "id": 5,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {"expr": "node_netstat_Tcp_CurrEstab", "legendFormat": "ESTABLISHED", "refId": "A"},
+        {"expr": "node_sockstat_TCP_tw", "legendFormat": "TIME_WAIT", "refId": "B"},
+        {"expr": "node_sockstat_TCP_alloc - node_netstat_Tcp_CurrEstab", "legendFormat": "other allocated", "refId": "C"},
+        {"expr": "node_sockstat_sockets_used", "legendFormat": "total sockets", "refId": "D"}
+      ],
+      "title": "TCP Connection States",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "TCP retransmission rate. High values indicate network congestion or packet loss.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never"},
+          "unit": "pps"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 10, "x": 14, "y": 5},
+      "id": 6,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "expr": "rate(node_netstat_Tcp_RetransSegs[1m])",
+          "legendFormat": "TCP retransmissions/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_netstat_Tcp_OutSegs[1m])",
+          "legendFormat": "TCP segments out/s",
+          "refId": "B"
+        }
+      ],
+      "title": "TCP Retransmissions",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13},
+      "id": 101,
+      "title": "Filesystem",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Inode utilization per filesystem. High inode usage can prevent new file creation even if disk space remains.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 90}
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 14},
+      "id": 7,
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "100 - (node_filesystem_files_free{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} / node_filesystem_files{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} * 100)",
+          "instant": true,
+          "legendFormat": "{{mountpoint}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Inode Usage",
+      "type": "gauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Filesystem space usage per mountpoint.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "color-text"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 70},
+              {"color": "red", "value": 85}
+            ]
+          }
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Mountpoint"}, "properties": [{"id": "custom.width", "value": 160}]},
+          {"matcher": {"id": "byName", "options": "Size"}, "properties": [{"id": "unit", "value": "bytes"}, {"id": "custom.width", "value": 100}]},
+          {"matcher": {"id": "byName", "options": "Used"}, "properties": [{"id": "unit", "value": "bytes"}, {"id": "custom.width", "value": 100}]},
+          {"matcher": {"id": "byName", "options": "Avail"}, "properties": [{"id": "unit", "value": "bytes"}, {"id": "custom.width", "value": 100}]},
+          {
+            "matcher": {"id": "byName", "options": "Use%"},
+            "properties": [
+              {"id": "unit", "value": "percent"},
+              {"id": "custom.displayMode", "value": "gradient-gauge"},
+              {"id": "thresholds", "value": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 70}, {"color": "red", "value": 85}]}}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 14},
+      "id": 8,
+      "options": {"sortBy": [{"desc": true, "displayName": "Use%"}]},
+      "targets": [
+        {
+          "expr": "node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        },
+        {
+          "expr": "node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} - node_filesystem_free_bytes{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "B"
+        },
+        {
+          "expr": "node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "C"
+        },
+        {
+          "expr": "100 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} * 100)",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "D"
+        }
+      ],
+      "title": "Filesystem Table",
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "mountpoint": "Mountpoint",
+              "Value #A": "Size",
+              "Value #B": "Used",
+              "Value #C": "Avail",
+              "Value #D": "Use%"
+            },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "device": true,
+              "fstype": true,
+              "instance": true,
+              "job": true
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "60s",
+  "schemaVersion": 41,
+  "tags": ["system", "health", "imac"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Sức khỏe hệ thống",
+  "uid": "system-health",
+  "version": 1
+}
+

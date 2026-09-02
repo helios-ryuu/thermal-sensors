@@ -23,14 +23,18 @@ services:
     image: prom/node-exporter:latest
     container_name: thermal-node-exporter
     command:
-      - --collector.disable-defaults
-      - --collector.textfile
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
       - --collector.textfile.directory=/textfile
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|run)($$|/)
     volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
       - ${SENS_DATA_DIR:-./data}/textfile:/textfile:ro
     networks:
       - monitoring
-    read_only: true
     security_opt:
       - no-new-privileges=true
     depends_on:

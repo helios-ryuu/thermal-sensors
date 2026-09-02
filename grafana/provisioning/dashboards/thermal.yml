@@ -1,13 +1,12 @@
 apiVersion: 1
 
 providers:
-  - name: Giám sát nhiệt độ
+  - name: Giám sát hệ thống
     orgId: 1
-    folder: Giám sát nhiệt độ
+    folder: Giám sát hệ thống
     type: file
     disableDeletion: true
     editable: false
     updateIntervalSeconds: 30
     options:
       path: /var/lib/grafana/dashboards
-

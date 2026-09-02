@@ -1,29 +1,32 @@
-# Giám sát nhiệt độ iMac bằng Grafana và Docker Compose (100% Containerized)
+# Giám sát phần cứng và hệ thống iMac bằng Grafana & Docker Compose
 
-Stack giám sát nhẹ cho Ubuntu trên iMac, hiển thị lịch sử nhiệt độ CPU, GPU, PCH, NVMe và tốc độ quạt từ `lm-sensors` trên Grafana, tích hợp Cloudflare Tunnel để truy cập an toàn từ xa.
+Stack giám sát toàn diện, nhẹ và đóng gói **100% bằng Docker Compose** cho máy Ubuntu chạy trên iMac. Hiển thị lịch sử nhiệt độ (CPU, GPU, PCH, NVMe, quạt Apple SMC, nhiệt độ phòng ~TA0V), toàn bộ tài nguyên hệ thống (CPU, RAM, Disk I/O, Network, TCP) và tích hợp sẵn Cloudflare Tunnel.
 
-Hệ thống được đóng gói **100% bằng Docker Compose**, không cần cài đặt các service hay timer systemd phức tạp trên host, dữ liệu được lưu trữ tập trung tại `~/.sens` (hoặc thư mục tùy chỉnh qua `.env`).
+Stack đi kèm **3 Dashboards Grafana** được nạp sẵn:
+1. **Cảm biến nhiệt độ iMac (`imac-thermal`)**: Chi tiết nhiệt độ các linh kiện, nhiệt độ phòng xấp xỉ (`TA0V - 1`), tốc độ quạt, công suất GPU và cấu hình `mbpfan`.
+2. **Tài nguyên hệ thống (`system-resources`)**: Tải CPU (chi tiết theo mode), Load Average, phân bổ RAM, Disk I/O & IOPS, băng thông mạng & lỗi/drop gói.
+3. **Sức khỏe hệ thống (`system-health`)**: Uptime, số nhân CPU, tổng dung lượng RAM, phiên bản Kernel, trạng thái kết nối TCP (ESTABLISHED, TIME_WAIT...), TCP Retransmissions, Inode usage và bảng dung lượng Filesystem.
 
 ---
 
 ## 🏗️ Kiến trúc hệ thống
 
 ```text
-Host Hardware (/sys, /etc/mbpfan.conf)
+Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
        │ (read-only bind-mount)
        ▼
 ┌────────────────────────────────────────────────────────┐
 │ Docker Compose Network (thermal-monitoring)            │
 │                                                        │
 │  ┌──────────────────┐                                  │
-│  │ thermal-collector│ (Chạy mỗi 10 giây)               │
+│  │ thermal-collector│ (Đọc sensors & mbpfan mỗi 10s)   │
 │  └────────┬─────────┘                                  │
 │           │ ghi metric textfile                        │
 │           ▼                                            │
 │  ┌──────────────────┐      ┌────────────────────────┐  │
-│  │  node-exporter   ├─────►│       prometheus       │  │
-│  └──────────────────┘      └───────────┬────────────┘  │
-│                                        │               │
+│  │  node-exporter   ├─────►│   thermal-prometheus   │  │
+│  │(Metric OS + Text)│      └───────────┬────────────┘  │
+│  └──────────────────┘                  │               │
 │                                        ▼               │
 │                            ┌────────────────────────┐  │
 │                            │    thermal-grafana     │◄─┼──┐

@@ -2,182 +2,153 @@
   "annotations": {
     "list": [
       {
-        "datasource": {
-          "type": "datasource",
-          "uid": "grafana"
-        },
+        "datasource": {"type": "datasource", "uid": "grafana"},
         "enable": true,
         "hide": true,
         "iconColor": "rgba(255, 193, 7, 0.12)",
-        "name": "Ban ngày (06:00-18:00)",
+        "name": "Daytime (06:00-18:00)",
         "target": {
           "queryType": "timeRegions",
           "refId": "Daytime",
-          "timeRegion": {
-            "from": "06:00",
-            "timezone": "browser",
-            "to": "18:00"
-          }
+          "timeRegion": {"from": "06:00", "timezone": "browser", "to": "18:00"}
         }
       },
       {
-        "datasource": {
-          "type": "datasource",
-          "uid": "grafana"
-        },
+        "datasource": {"type": "datasource", "uid": "grafana"},
         "enable": true,
         "hide": true,
         "iconColor": "rgba(88, 116, 163, 0.18)",
-        "name": "Ban đêm (18:00-06:00)",
+        "name": "Nighttime (18:00-06:00)",
         "target": {
           "queryType": "timeRegions",
           "refId": "Nighttime",
-          "timeRegion": {
-            "from": "18:00",
-            "timezone": "browser",
-            "to": "06:00"
-          }
+          "timeRegion": {"from": "18:00", "timezone": "browser", "to": "06:00"}
         }
       }
     ]
   },
   "editable": false,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "title": "Tài nguyên hệ thống",
+      "type": "dashboard",
+      "url": "/d/system-resources",
+      "tooltip": "Xem dashboard tài nguyên hệ thống"
+    },
+    {
+      "title": "Sức khỏe hệ thống",
+      "type": "dashboard",
+      "url": "/d/system-health",
+      "tooltip": "Xem dashboard sức khỏe hệ thống"
+    }
+  ],
   "panels": [
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {
           "mappings": [
             {
               "options": {
-                "0": {
-                  "color": "red",
-                  "text": "Lỗi"
-                },
-                "1": {
-                  "color": "green",
-                  "text": "Tốt"
-                }
+                "0": {"color": "red", "text": "Error"},
+                "1": {"color": "green", "text": "OK"}
               },
               "type": "value"
             }
           ],
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
+            "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]
           }
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 0,
-        "y": 0
-      },
+      "gridPos": {"h": 4, "w": 3, "x": 0, "y": 0},
       "id": 1,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
         "textMode": "auto"
       },
       "targets": [
-        {
-          "expr": "thermal_collector_success",
-          "instant": true,
-          "legendFormat": "bộ thu thập",
-          "refId": "A"
-        }
+        {"expr": "thermal_collector_success", "instant": true, "legendFormat": "collector", "refId": "A"}
       ],
-      "title": "Trạng thái thu thập",
+      "title": "Collector Status",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 30
-              },
-              {
-                "color": "red",
-                "value": 60
-              }
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "red", "value": 60}
             ]
           },
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 0
-      },
+      "gridPos": {"h": 4, "w": 3, "x": 3, "y": 0},
       "id": 2,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [
+        {"expr": "time() - thermal_collector_timestamp_seconds", "instant": true, "legendFormat": "data age", "refId": "A"}
+      ],
+      "title": "Data Age",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Approximate room temperature from Apple SMC air intake sensor (TA0V). Formula: TA0V - 1°C.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 30},
+              {"color": "red", "value": 35}
+            ]
+          },
+          "unit": "celsius"
         },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 6, "y": 0},
+      "id": 12,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
         "textMode": "auto"
       },
       "targets": [
         {
-          "expr": "time() - thermal_collector_timestamp_seconds",
+          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 1",
           "instant": true,
-          "legendFormat": "tuổi dữ liệu",
+          "legendFormat": "~room",
           "refId": "A"
         }
       ],
-      "title": "Tuổi dữ liệu",
+      "title": "~Room Temperature",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Hotspot cao nhất trong mọi cảm biến hợp lệ, kể cả từng core CPU. Ngưỡng màu lấy từ cấu hình mbpfan đã thu thập.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Hotspot across all valid sensors. Green < 55°C, yellow 55-70°C, red > 70°C.",
       "fieldConfig": {
         "defaults": {
           "max": 100,
@@ -185,106 +156,31 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": null
-              }
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 55},
+              {"color": "red", "value": 70}
             ]
           },
           "unit": "celsius"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 8,
-        "y": 0
-      },
+      "gridPos": {"h": 4, "w": 5, "x": 10, "y": 0},
       "id": 3,
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
       "targets": [
-        {
-          "expr": "max(thermal_temperature_celsius)",
-          "format": "table",
-          "instant": true,
-          "legendFormat": "cao nhất",
-          "refId": "A"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "B"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "C"
-        }
+        {"expr": "max(thermal_temperature_celsius)", "format": "time_series", "instant": true, "legendFormat": "max temp", "refId": "A"}
       ],
-      "title": "Nhiệt độ cao nhất",
-      "transformations": [
-        {
-          "id": "configFromData",
-          "options": {
-            "applyTo": {
-              "id": "byName",
-              "options": "Value #A"
-            },
-            "configRefId": "B",
-            "mappings": [
-              {
-                "fieldName": "Value #B",
-                "handlerKey": "threshold1"
-              }
-            ]
-          }
-        },
-        {
-          "id": "configFromData",
-          "options": {
-            "applyTo": {
-              "id": "byName",
-              "options": "Value #A"
-            },
-            "configRefId": "C",
-            "mappings": [
-              {
-                "fieldName": "Value #C",
-                "handlerKey": "threshold2"
-              }
-            ]
-          }
-        }
-      ],
+      "title": "Max Temperature",
       "type": "gauge"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Trung bình các cảm biến đại diện hiện có: CPU package tính một lần, cùng GPU, PCH, NVMe và SMC đã cho phép. Không trung bình lặp các core CPU.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Average of representative sensors: CPU package (once), GPU, PCH, NVMe, allowed SMC. Green < 50°C, yellow 50-65°C, red > 65°C.",
       "fieldConfig": {
         "defaults": {
           "max": 100,
@@ -292,137 +188,56 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": null
-              }
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 50},
+              {"color": "red", "value": 65}
             ]
           },
           "unit": "celsius"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 5,
-        "x": 13,
-        "y": 0
-      },
+      "gridPos": {"h": 4, "w": 5, "x": 15, "y": 0},
       "id": 10,
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
       "targets": [
         {
           "expr": "avg(thermal_temperature_celsius{component!=\"cpu\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
-          "format": "table",
+          "format": "time_series",
           "instant": true,
-          "legendFormat": "trung bình toàn máy",
+          "legendFormat": "machine avg",
           "refId": "A"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "B"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
-          "format": "table",
-          "instant": true,
-          "refId": "C"
         }
       ],
-      "title": "Nhiệt độ trung bình",
-      "transformations": [
-        {
-          "id": "configFromData",
-          "options": {
-            "applyTo": {
-              "id": "byName",
-              "options": "Value #A"
-            },
-            "configRefId": "B",
-            "mappings": [
-              {
-                "fieldName": "Value #B",
-                "handlerKey": "threshold1"
-              }
-            ]
-          }
-        },
-        {
-          "id": "configFromData",
-          "options": {
-            "applyTo": {
-              "id": "byName",
-              "options": "Value #A"
-            },
-            "configRefId": "C",
-            "mappings": [
-              {
-                "fieldName": "Value #C",
-                "handlerKey": "threshold2"
-              }
-            ]
-          }
-        }
-      ],
+      "title": "Avg Temperature",
       "type": "gauge"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Thang đo RPM lấy trực tiếp từ giới hạn min/max trong cấu hình mbpfan hợp lệ đã thu thập.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current fan RPM against mbpfan min/max config. Yellow when approaching max.",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 2500},
+              {"color": "red", "value": 2900}
             ]
           },
           "unit": "rpm"
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 0
-      },
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
       "id": 4,
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
@@ -431,7 +246,7 @@
           "expr": "thermal_fan_speed_rpm{component=\"fan\",sensor=\"main\"}",
           "format": "table",
           "instant": true,
-          "legendFormat": "quạt chính",
+          "legendFormat": "main fan",
           "refId": "A"
         },
         {
@@ -447,73 +262,43 @@
           "refId": "C"
         }
       ],
-      "title": "Tốc độ quạt chính",
+      "title": "Main Fan Speed",
       "transformations": [
         {
           "id": "configFromData",
           "options": {
-            "applyTo": {
-              "id": "byName",
-              "options": "Value #A"
-            },
+            "applyTo": {"id": "byName", "options": "Value #A"},
             "configRefId": "B",
-            "mappings": [
-              {
-                "fieldName": "Value #B",
-                "handlerKey": "min"
-              }
-            ]
+            "mappings": [{"fieldName": "Value #B", "handlerKey": "min"}]
           }
         },
         {
           "id": "configFromData",
           "options": {
-            "applyTo": {
-              "id": "byName",
-              "options": "Value #A"
-            },
+            "applyTo": {"id": "byName", "options": "Value #A"},
             "configRefId": "C",
-            "mappings": [
-              {
-                "fieldName": "Value #C",
-                "handlerKey": "max"
-              }
-            ]
+            "mappings": [{"fieldName": "Value #C", "handlerKey": "max"}]
           }
         }
       ],
       "type": "gauge"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Giá trị được đọc từ /etc/mbpfan.conf; không có dữ liệu cho khoảng thời gian trước khi collector bắt đầu xuất metric cấu hình.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Values read from /etc/mbpfan.conf. No data for periods before the collector started exporting config metrics.",
       "fieldConfig": {
-        "defaults": {
-          "decimals": 0
-        },
+        "defaults": {"decimals": 0},
         "overrides": [
           {
-            "matcher": {
-              "id": "byName",
-              "options": "cấu hình hợp lệ"
-            },
+            "matcher": {"id": "byName", "options": "config valid"},
             "properties": [
               {
                 "id": "mappings",
                 "value": [
                   {
                     "options": {
-                      "0": {
-                        "color": "red",
-                        "text": "Lỗi"
-                      },
-                      "1": {
-                        "color": "green",
-                        "text": "Tốt"
-                      }
+                      "0": {"color": "red", "text": "Error"},
+                      "1": {"color": "green", "text": "OK"}
                     },
                     "type": "value"
                   }
@@ -522,104 +307,40 @@
             ]
           },
           {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/^(nhiệt thấp|nhiệt cao|nhiệt tối đa)$/"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "celsius"
-              }
-            ]
+            "matcher": {"id": "byRegexp", "options": "/^(low temp|high temp|max temp)$/"},
+            "properties": [{"id": "unit", "value": "celsius"}]
           },
           {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "/^(quạt tối thiểu|quạt tối đa)$/"
-            },
+            "matcher": {"id": "byRegexp", "options": "/^(fan min|fan max)$/"},
             "properties": [
-              {
-                "id": "unit",
-                "value": "suffix: RPM"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
+              {"id": "unit", "value": "suffix: RPM"},
+              {"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}
             ]
           }
         ]
       },
-      "gridPos": {
-        "h": 4,
-        "w": 24,
-        "x": 0,
-        "y": 4
-      },
+      "gridPos": {"h": 4, "w": 24, "x": 0, "y": 4},
       "id": 11,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
         "textMode": "auto"
       },
       "targets": [
-        {
-          "expr": "thermal_mbpfan_config_valid",
-          "instant": true,
-          "legendFormat": "cấu hình hợp lệ",
-          "refId": "A"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"low\"}",
-          "instant": true,
-          "legendFormat": "nhiệt thấp",
-          "refId": "B"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}",
-          "instant": true,
-          "legendFormat": "nhiệt cao",
-          "refId": "C"
-        },
-        {
-          "expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}",
-          "instant": true,
-          "legendFormat": "nhiệt tối đa",
-          "refId": "D"
-        },
-        {
-          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"min\"}",
-          "instant": true,
-          "legendFormat": "quạt tối thiểu",
-          "refId": "E"
-        },
-        {
-          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"max\"}",
-          "instant": true,
-          "legendFormat": "quạt tối đa",
-          "refId": "F"
-        }
+        {"expr": "thermal_mbpfan_config_valid", "instant": true, "legendFormat": "config valid", "refId": "A"},
+        {"expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"low\"}", "instant": true, "legendFormat": "low temp", "refId": "B"},
+        {"expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"high\"}", "instant": true, "legendFormat": "high temp", "refId": "C"},
+        {"expr": "thermal_mbpfan_temperature_threshold_celsius{threshold=\"max\"}", "instant": true, "legendFormat": "max temp", "refId": "D"},
+        {"expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"min\"}", "instant": true, "legendFormat": "fan min", "refId": "E"},
+        {"expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"max\"}", "instant": true, "legendFormat": "fan max", "refId": "F"}
       ],
-      "title": "Cấu hình mbpfan",
+      "title": "mbpfan Config",
       "type": "stat"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "CPU chỉ hiện package làm đại diện; panel CPU riêng vẫn hiện từng core. Đường trung bình toàn máy được nhấn mạnh để theo dõi mức nhiệt đại diện.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "CPU represented by package only. ~room = air intake - 1°C (TA0V). Machine avg without fill.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -635,70 +356,43 @@
         },
         "overrides": [
           {
-            "matcher": {
-              "id": "byName",
-              "options": "trung bình toàn máy"
-            },
+            "matcher": {"id": "byName", "options": "machine avg"},
             "properties": [
-              {
-                "id": "custom.lineWidth",
-                "value": 4
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 10
-              },
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
+              {"id": "custom.lineWidth", "value": 3},
+              {"id": "custom.fillOpacity", "value": 0},
+              {"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}
             ]
           },
           {
-            "matcher": {
-              "id": "byName",
-              "options": "gpu / edge"
-            },
+            "matcher": {"id": "byName", "options": "gpu / edge"},
             "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "red",
-                  "mode": "fixed"
-                }
-              }
+              {"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "~room"},
+            "properties": [
+              {"id": "color", "value": {"fixedColor": "light-blue", "mode": "fixed"}},
+              {"id": "custom.lineWidth", "value": 1},
+              {"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [8, 4]}}
             ]
           }
         ]
       },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 8
-      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
       "id": 5,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
+          "calcs": ["lastNotNull", "max"],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
         {
-          "expr": "thermal_temperature_celsius{component!=\"cpu\"}",
+          "expr": "thermal_temperature_celsius{component!=\"cpu\",sensor!=\"air_intake\"}",
           "legendFormat": "{{component}} / {{sensor}}",
           "refId": "A"
         },
@@ -708,19 +402,21 @@
           "refId": "B"
         },
         {
-          "expr": "avg(thermal_temperature_celsius{component!=\"cpu\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
-          "legendFormat": "trung bình toàn máy",
+          "expr": "avg(thermal_temperature_celsius{component!=\"cpu\",sensor!=\"air_intake\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
+          "legendFormat": "machine avg",
           "refId": "C"
+        },
+        {
+          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 1",
+          "legendFormat": "~room",
+          "refId": "D"
         }
       ],
-      "title": "Tất cả nhiệt độ hợp lệ",
+      "title": "Temperature Overview",
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -734,26 +430,16 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
       "id": 6,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
         {
@@ -762,14 +448,11 @@
           "refId": "A"
         }
       ],
-      "title": "CPU package và core",
+      "title": "CPU Package & Cores",
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -783,26 +466,16 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 16
-      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
       "id": 7,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
+          "calcs": ["lastNotNull"],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
         {
@@ -811,15 +484,12 @@
           "refId": "A"
         }
       ],
-      "title": "GPU, PCH, NVMe và SMC đã cho phép",
+      "title": "GPU, PCH, NVMe & SMC",
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "Line min/max lấy từ cấu hình mbpfan hợp lệ; khoảng trước khi metric cấu hình tồn tại chỉ có tốc độ quạt đo được.",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Min/max lines from mbpfan config. Periods before config metric existed show measured RPM only.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -833,66 +503,32 @@
         },
         "overrides": [
           {
-            "matcher": {
-              "id": "byName",
-              "options": "main"
-            },
-            "properties": [
-              {
-                "id": "custom.fillOpacity",
-                "value": 10
-              }
-            ]
+            "matcher": {"id": "byName", "options": "main"},
+            "properties": [{"id": "custom.fillOpacity", "value": 10}]
           }
         ]
       },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 24
-      },
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 24},
       "id": 8,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
+          "calcs": ["lastNotNull", "max"],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
-        {
-          "expr": "thermal_fan_speed_rpm",
-          "legendFormat": "{{sensor}}",
-          "refId": "A"
-        },
-        {
-          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"min\"}",
-          "legendFormat": "mbpfan / min",
-          "refId": "B"
-        },
-        {
-          "expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"max\"}",
-          "legendFormat": "mbpfan / max",
-          "refId": "C"
-        }
+        {"expr": "thermal_fan_speed_rpm", "legendFormat": "{{sensor}}", "refId": "A"},
+        {"expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"min\"}", "legendFormat": "mbpfan / min", "refId": "B"},
+        {"expr": "thermal_mbpfan_fan_speed_limit_rpm{fan=\"1\",limit=\"max\"}", "legendFormat": "mbpfan / max", "refId": "C"}
       ],
-      "title": "Lịch sử tốc độ quạt",
+      "title": "Fan Speed",
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -906,56 +542,32 @@
         },
         "overrides": []
       },
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 24
-      },
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 24},
       "id": 9,
       "options": {
         "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
+          "calcs": ["lastNotNull", "max"],
           "displayMode": "table",
           "placement": "right",
           "showLegend": true
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
+        "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
-        {
-          "expr": "thermal_gpu_power_watts",
-          "legendFormat": "{{sensor}}",
-          "refId": "A"
-        }
+        {"expr": "thermal_gpu_power_watts", "legendFormat": "{{sensor}}", "refId": "A"}
       ],
-      "title": "Công suất GPU",
+      "title": "GPU Power",
       "type": "timeseries"
     }
   ],
-  "refresh": "15s",
+  "refresh": "10s",
   "schemaVersion": 41,
-  "tags": [
-    "nhiệt độ",
-    "imac",
-    "lm-sensors"
-  ],
-  "templating": {
-    "list": []
-  },
-  "time": {
-    "from": "now-6h",
-    "to": "now"
-  },
+  "tags": ["thermal", "imac", "lm-sensors"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
   "timepicker": {},
   "timezone": "browser",
   "title": "Cảm biến nhiệt độ iMac",
   "uid": "imac-thermal",
-  "version": 5
+  "version": 6
 }

@@ -24,7 +24,9 @@ MBPFAN_REQUIRED_KEYS = {
 }
 
 # Chỉ thêm key Apple SMC sau khi đã xác minh key đó ổn định trên đúng máy này.
+# TA0V: air intake temperature — dùng để xấp xỉ nhiệt độ phòng (~TA0V - 1°C)
 APPLE_TEMPERATURE_ALLOWLIST = {
+    "TA0V": "air_intake",
     # "TC0P": "cpu_proximity",
 }
 
