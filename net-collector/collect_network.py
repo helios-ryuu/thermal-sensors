@@ -265,6 +265,134 @@ def resolve_device_name(ip: str, gateway_ip: str = None, vendor: str = None) -> 
     return label
 
 
+_device_fingerprint_cache = {}
+
+PORT_SERVICE_MAP = {
+    22: "SSH",
+    53: "DNS",
+    80: "HTTP",
+    443: "HTTPS",
+    445: "SMB",
+    5000: "AirPlay",
+    7000: "AirPlay-Mirror",
+    8008: "GoogleCast",
+    8080: "WebUI",
+    62078: "AppleSync",
+}
+
+
+def _probe_ip_ports(ip: str, timeout: float = 0.15):
+    """Kiểm tra nhanh các cổng thông dụng trên một IP."""
+    target_ports = [22, 53, 80, 443, 445, 5000, 7000, 8008, 8080, 62078]
+    open_ports = []
+    for p in target_ports:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(timeout)
+            if s.connect_ex((ip, p)) == 0:
+                open_ports.append(p)
+            s.close()
+        except Exception:
+            pass
+    return open_ports
+
+
+def _fetch_http_banner(ip: str, port: int = 80, timeout: float = 0.3) -> str:
+    """Lấy tiêu đề HTML hoặc Server banner nếu cổng 80/443 mở."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((ip, port))
+        req = f"GET / HTTP/1.0\r\nHost: {ip}\r\nUser-Agent: PrometheusNetCollector/1.0\r\n\r\n"
+        s.sendall(req.encode())
+        data = s.recv(1024).decode("utf-8", errors="ignore")
+        s.close()
+        m = re.search(r"<title[^>]*>([^<]+)</title>", data, re.IGNORECASE)
+        if m:
+            title = m.group(1).strip()
+            if len(title) > 28:
+                title = title[:26] + ".."
+            return title
+        m = re.search(r"Server:\s*([^\r\n]+)", data, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+    except Exception:
+        pass
+    return ""
+
+
+def fingerprint_device(ip: str, mac: str, gateway_ip: str = None, vendor: str = None, reachable: bool = True):
+    """
+    Thu thập dấu vân tay (fingerprint) của thiết bị:
+    - Hostname / PTR DNS name
+    - Cổng mở và dịch vụ đang lắng nghe
+    - Phân loại kiểu thiết bị (Router, Apple Device, Smart TV, Linux Host, v.v.)
+    - Tiêu đề HTTP Web banner nếu có
+    """
+    now = time.time()
+    if ip in _device_fingerprint_cache:
+        cached_entry, exp_time = _device_fingerprint_cache[ip]
+        if now < exp_time:
+            return cached_entry
+
+    hostname = resolve_device_name(ip, gateway_ip=gateway_ip, vendor=vendor)
+
+    open_ports = []
+    http_banner = ""
+    if reachable:
+        open_ports = _probe_ip_ports(ip, timeout=0.15)
+        if 80 in open_ports:
+            http_banner = _fetch_http_banner(ip, port=80)
+        elif 8080 in open_ports:
+            http_banner = _fetch_http_banner(ip, port=8080)
+
+    # Phân loại kiểu thiết bị
+    if gateway_ip and ip == gateway_ip:
+        dev_type = "Router / Gateway"
+        if http_banner:
+            hostname = f"Gateway ({http_banner})"
+    elif any(p in open_ports for p in [5000, 7000, 62078]):
+        dev_type = "Apple Device (AirPlay/iOS)"
+    elif 8008 in open_ports:
+        dev_type = "Smart TV / Cast Device"
+    elif 445 in open_ports:
+        dev_type = "File Server / Windows PC"
+    elif 53 in open_ports:
+        dev_type = "DNS Server / Appliance"
+    elif 22 in open_ports:
+        dev_type = "Linux Server / Host"
+    elif any(p in open_ports for p in [80, 443, 8080]):
+        dev_type = "Web Appliance / Server"
+    elif vendor == "Apple Inc.":
+        dev_type = "Apple Device (Mac/iPhone)"
+    elif "Private" in (vendor or ""):
+        dev_type = "Mobile Client (Private Wi-Fi)"
+    elif "IoT" in (vendor or "") or "Espressif" in (vendor or ""):
+        dev_type = "Smart Home / IoT Device"
+    elif "Samsung" in (vendor or ""):
+        dev_type = "Samsung Device"
+    elif "Intel" in (vendor or ""):
+        dev_type = "PC / Intel Workstation"
+    else:
+        dev_type = "Network Client"
+
+    # Danh sách dịch vụ phát hiện được
+    if open_ports:
+        svc_names = [PORT_SERVICE_MAP.get(p, str(p)) for p in open_ports]
+        services_str = ", ".join(svc_names[:4])
+    else:
+        services_str = "ICMP Only"
+
+    info = {
+        "name": hostname,
+        "device_type": dev_type,
+        "services": services_str,
+    }
+    # Cache trong 300 giây (5 phút) để nhẹ nhàng cho mạng
+    _device_fingerprint_cache[ip] = (info, now + 300.0)
+    return info
+
+
 def get_network_interfaces():
     """Lấy danh sách interfaces, IP, MTU, Speed, Duplex, MAC từ `ip -j addr` và /sys."""
     interfaces = []
@@ -883,17 +1011,19 @@ def collect_network_metrics(lines):
     for a in arp_entries:
         status = "reachable" if a["reachable"] else "stale"
         vendor = identify_mac_vendor(a["mac"])
-        dev_name = resolve_device_name(a["ip"], gateway_ip=gateway_ip, vendor=vendor)
+        fp = fingerprint_device(a["ip"], a["mac"], gateway_ip=gateway_ip, vendor=vendor, reachable=a["reachable"])
         add_sample(
             lines,
             "net_device_info",
             1,
             {
                 "network": "LAN",
-                "name": dev_name,
+                "name": fp["name"],
                 "ip": a["ip"],
                 "identifier": a["mac"],
                 "vendor": vendor,
+                "device_type": fp["device_type"],
+                "services": fp["services"],
                 "status": status,
                 "link_type": "direct",
             },
@@ -921,6 +1051,7 @@ def collect_network_metrics(lines):
             status = "online" if p.get("Online") else "offline"
             link = "direct" if p.get("CurAddr") else f"relay-{p.get('Relay', 'derp')}"
             os_name = p.get("OS", "node").capitalize()
+            cur_addr = p.get("CurAddr", "via DERP relay")
             add_sample(
                 lines,
                 "net_device_info",
@@ -931,6 +1062,8 @@ def collect_network_metrics(lines):
                     "ip": ip,
                     "identifier": p.get("OS", "node"),
                     "vendor": f"Tailscale ({os_name})",
+                    "device_type": f"Tailscale {os_name} Node",
+                    "services": f"WireGuard ({cur_addr})",
                     "status": status,
                     "link_type": link,
                 },

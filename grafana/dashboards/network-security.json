@@ -461,7 +461,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Real-time ICMP ping latency gauges to Gateway, DNS, and Internet (1.1.1.1). Green = Fast, Yellow = Moderate, Red = Slow.",
+      "description": "Real-time ICMP ping latency dials to Gateway, DNS, and Internet (1.1.1.1). Green = Fast, Yellow = Moderate, Red = Slow.",
       "fieldConfig": {
         "defaults": {
           "min": 0,
@@ -1194,9 +1194,68 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Device counts across LAN (ARP) and Tailscale virtual private network.",
+      "description": "Total active devices discovered across all networks (LAN + Tailscale).",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 27
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "count(net_device_info) or vector(0)",
+          "instant": true,
+          "legendFormat": "Total Devices",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Network Devices",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Active devices discovered on the physical local LAN via ARP table.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1207,81 +1266,19 @@
             ]
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "LAN Devices"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Tailscale Nodes"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Reachable Online"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "green",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Stale / Inactive"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "yellow",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 9,
-        "w": 5,
-        "x": 0,
+        "h": 4,
+        "w": 6,
+        "x": 6,
         "y": 27
       },
-      "id": 12,
+      "id": 17,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "vertical",
+        "justifyMode": "center",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -1289,7 +1286,7 @@
           "fields": "",
           "values": false
         },
-        "textMode": "value_and_name"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -1297,27 +1294,9 @@
           "instant": true,
           "legendFormat": "LAN Devices",
           "refId": "A"
-        },
-        {
-          "expr": "count(net_device_info{network=\"Tailscale\"}) or vector(0)",
-          "instant": true,
-          "legendFormat": "Tailscale Nodes",
-          "refId": "B"
-        },
-        {
-          "expr": "count(net_device_info{status=~\"reachable|online\"}) or vector(0)",
-          "instant": true,
-          "legendFormat": "Reachable Online",
-          "refId": "C"
-        },
-        {
-          "expr": "count(net_device_info{status=~\"stale|offline\"}) or vector(0)",
-          "instant": true,
-          "legendFormat": "Stale / Inactive",
-          "refId": "D"
         }
       ],
-      "title": "Device Network Summary",
+      "title": "Local LAN Devices",
       "type": "stat"
     },
     {
@@ -1325,7 +1304,117 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Combined inventory: local LAN (ARP neighbors) + Tailscale virtual network peers. Shows Device Hostname, Hardware Vendor (Apple, Samsung, Intel, Private Wi-Fi, ZTE Gateway), MAC, Status and Link.",
+      "description": "Peer nodes connected in the Tailscale private mesh network.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 27
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "count(net_device_info{network=\"Tailscale\"}) or vector(0)",
+          "instant": true,
+          "legendFormat": "Tailscale Nodes",
+          "refId": "A"
+        }
+      ],
+      "title": "Tailscale Mesh Nodes",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Currently active, reachable devices responding on the network.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 27
+      },
+      "id": 19,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "count(net_device_info{status=~\"reachable|online\"}) or vector(0)",
+          "instant": true,
+          "legendFormat": "Active Online",
+          "refId": "A"
+        }
+      ],
+      "title": "Active / Reachable Online",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Deep device profiling combining ARP neighbors, Tailscale mesh, OUI MAC vendor analysis, DNS resolution, open port fingerprinting (AirPlay, SSH, HTTP, SMB, Cast) and link status.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -1351,7 +1440,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 110
+                "value": 105
               },
               {
                 "id": "custom.displayMode",
@@ -1385,7 +1474,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 120
+                "value": 115
               },
               {
                 "id": "custom.displayMode",
@@ -1427,7 +1516,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 160
+                "value": 145
               }
             ]
           },
@@ -1446,12 +1535,113 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Device Profile"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "Router / Gateway": {
+                        "color": "blue",
+                        "text": "Router / Gateway"
+                      },
+                      "Apple Device (AirPlay/iOS)": {
+                        "color": "green",
+                        "text": "Apple Device (AirPlay)"
+                      },
+                      "Apple Device (Mac/iPhone)": {
+                        "color": "green",
+                        "text": "Apple Device"
+                      },
+                      "Smart TV / Cast Device": {
+                        "color": "purple",
+                        "text": "Smart TV / Cast"
+                      },
+                      "File Server / Windows PC": {
+                        "color": "orange",
+                        "text": "File Server / PC"
+                      },
+                      "Linux Server / Host": {
+                        "color": "purple",
+                        "text": "Linux Server"
+                      },
+                      "Mobile Client (Private Wi-Fi)": {
+                        "color": "orange",
+                        "text": "Mobile (Private MAC)"
+                      },
+                      "Smart Home / IoT Device": {
+                        "color": "yellow",
+                        "text": "Smart Home / IoT"
+                      },
+                      "Web Appliance / Server": {
+                        "color": "blue",
+                        "text": "Web Appliance"
+                      }
+                    },
+                    "type": "value"
+                  },
+                  {
+                    "options": {
+                      "pattern": "^Tailscale.*",
+                      "result": {
+                        "color": "purple"
+                      }
+                    },
+                    "type": "regex"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Detected Services"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 175
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "ICMP Only": {
+                        "color": "gray",
+                        "text": "ICMP Ping Only"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Hardware Vendor"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 210
+                "value": 190
               },
               {
                 "id": "custom.displayMode",
@@ -1497,7 +1687,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 160
+                "value": 155
               }
             ]
           },
@@ -1509,7 +1699,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 120
+                "value": 100
               },
               {
                 "id": "custom.displayMode",
@@ -1534,10 +1724,10 @@
         ]
       },
       "gridPos": {
-        "h": 9,
-        "w": 19,
-        "x": 5,
-        "y": 27
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 31
       },
       "id": 13,
       "options": {
@@ -1561,7 +1751,7 @@
           "refId": "A"
         }
       ],
-      "title": "Unified Device Inventory",
+      "title": "Unified Device Inventory (LAN & Tailscale)",
       "transformations": [
         {
           "id": "organize",
@@ -1570,8 +1760,10 @@
               "network": "Network",
               "name": "Device Name",
               "ip": "IP Address",
-              "identifier": "Identifier (MAC / OS)",
+              "device_type": "Device Profile",
+              "services": "Detected Services",
               "vendor": "Hardware Vendor",
+              "identifier": "Identifier (MAC / OS)",
               "status": "Status",
               "link_type": "Link Type"
             },
@@ -1587,9 +1779,11 @@
               "Status": 1,
               "IP Address": 2,
               "Device Name": 3,
-              "Hardware Vendor": 4,
-              "Identifier (MAC / OS)": 5,
-              "Link Type": 6
+              "Device Profile": 4,
+              "Detected Services": 5,
+              "Hardware Vendor": 6,
+              "Identifier (MAC / OS)": 7,
+              "Link Type": 8
             }
           }
         }
@@ -1602,7 +1796,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 36
+        "y": 42
       },
       "id": 103,
       "title": "Ports & Active Connections",
@@ -1737,7 +1931,7 @@
         "h": 9,
         "w": 13,
         "x": 0,
-        "y": 37
+        "y": 43
       },
       "id": 14,
       "options": {
@@ -1937,7 +2131,7 @@
         "h": 9,
         "w": 11,
         "x": 13,
-        "y": 37
+        "y": 43
       },
       "id": 15,
       "options": {
@@ -1987,7 +2181,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 52
       },
       "id": 104,
       "title": "Firewall & Traffic Filtering",
@@ -2142,7 +2336,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 53
       },
       "id": 16,
       "options": {
@@ -2209,5 +2403,5 @@
   "timezone": "browser",
   "title": "M\u1ea1ng & B\u1ea3o m\u1eadt",
   "uid": "network-security",
-  "version": 3
+  "version": 4
 }

@@ -6,7 +6,8 @@ RUN apk add --no-cache \
     iptables \
     curl \
     traceroute \
-    bind-tools
+    bind-tools \
+    nmap
 
 WORKDIR /app
 
