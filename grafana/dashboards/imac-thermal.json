@@ -283,7 +283,7 @@
       },
       "targets": [
         {
-          "expr": "thermal_room_temperature_celsius or avg by (instance, job) (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} + clamp_max(clamp_min((23.5 - thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}) * 0.2, 0), 0.4))",
+          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} + clamp_max(clamp_min((23.5 - thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}) * 0.2, 0), 0.4)",
           "instant": true,
           "legendFormat": "~room",
           "refId": "A"
@@ -936,7 +936,7 @@
       },
       "targets": [
         {
-          "expr": "thermal_room_temperature_celsius or avg by (instance, job) (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} + clamp_max(clamp_min((23.5 - thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}) * 0.2, 0), 0.4))",
+          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} + clamp_max(clamp_min((23.5 - thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}) * 0.2, 0), 0.4)",
           "legendFormat": "~room (estimated)",
           "refId": "A"
         },
@@ -1190,5 +1190,5 @@
   "timezone": "browser",
   "title": "C\u1ea3m bi\u1ebfn nhi\u1ec7t \u0111\u1ed9 iMac",
   "uid": "imac-thermal",
-  "version": 13
+  "version": 14
 }
