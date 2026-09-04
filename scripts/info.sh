@@ -24,7 +24,11 @@ SENS_DATA_DIR="${SENS_DATA_DIR:-${HOME}/.sens}"
 # Tự động phát hiện IP Tailscale của máy
 TAILSCALE_IP="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
 
-GRAFANA_IP="${GRAFANA_BIND_IP:-${TAILSCALE_IP:-127.0.0.1}}"
+if [ -n "${GRAFANA_BIND_IP:-}" ] && [ "${GRAFANA_BIND_IP}" != "0.0.0.0" ]; then
+    GRAFANA_IP="${GRAFANA_BIND_IP}"
+else
+    GRAFANA_IP="${TAILSCALE_IP:-127.0.0.1}"
+fi
 GRAFANA_P="${GRAFANA_PORT:-3000}"
 PROM_IP="${PROMETHEUS_BIND_IP:-127.0.0.1}"
 PROM_P="${PROMETHEUS_PORT:-9090}"

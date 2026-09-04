@@ -88,7 +88,7 @@ services:
     image: grafana/grafana:latest
     container_name: thermal-grafana
     ports:
-      - "${GRAFANA_BIND_IP:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
+      - "${GRAFANA_BIND_IP:-0.0.0.0}:${GRAFANA_PORT:-3000}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}

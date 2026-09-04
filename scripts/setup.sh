@@ -51,7 +51,11 @@ docker compose build collector net-collector
 docker compose up -d
 
 TAILSCALE_IP="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
-DISPLAY_IP="${GRAFANA_BIND_IP:-${TAILSCALE_IP:-127.0.0.1}}"
+if [ -n "${GRAFANA_BIND_IP:-}" ] && [ "${GRAFANA_BIND_IP}" != "0.0.0.0" ]; then
+    DISPLAY_IP="${GRAFANA_BIND_IP}"
+else
+    DISPLAY_IP="${TAILSCALE_IP:-127.0.0.1}"
+fi
 
 echo ""
 echo "======================================================"

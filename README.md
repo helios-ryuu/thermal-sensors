@@ -83,7 +83,7 @@ Host Network & Hardware (/proc, /sys, /var/run/tailscale/tailscaled.sock, iptabl
 | `SENS_DATA_DIR` | `/home/user/.sens` | Thư mục lưu trữ tập trung dữ liệu |
 | `GRAFANA_ADMIN_USER` | `admin` | Tên đăng nhập Admin Grafana |
 | `GRAFANA_ADMIN_PASSWORD` | `...` | Mật khẩu Admin Grafana (cấu hình trong `.env`) |
-| `GRAFANA_BIND_IP` | `<TAILSCALE_IP>` | IP publish của Grafana (Địa chỉ IP Tailscale của máy hoặc 127.0.0.1) |
+| `GRAFANA_BIND_IP` | `0.0.0.0` | IP publish của Grafana (Mặc định `0.0.0.0` để lắng nghe Tailscale & LAN, hoặc điền IP Tailscale để giới hạn) |
 | `GRAFANA_PORT` | `3000` | Port truy cập Grafana |
 | `PROMETHEUS_BIND_IP`| `127.0.0.1` | IP publish của Prometheus |
 | `PROMETHEUS_PORT` | `9090` | Port truy cập Prometheus |
