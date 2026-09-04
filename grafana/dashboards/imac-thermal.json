@@ -196,7 +196,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Estimated room temperature (~Room) via dynamic thermal gradient & chassis conduction model, and raw inlet air temperature at the bottom chassis intake (Inlet Air TA0V).",
+      "description": "Intake air temperature measured directly at the bottom chassis grille (Inlet Air TA0V) and ambient room intake temperature.",
       "fieldConfig": {
         "defaults": {
           "decimals": 1,
@@ -283,7 +283,7 @@
       },
       "targets": [
         {
-          "expr": "thermal_room_temperature_celsius or thermal_estimated_ambient_temperature_celsius",
+          "expr": "thermal_room_temperature_celsius or ((thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} + clamp_max(clamp_min((23.5 - thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}) / 2.0 * 0.4, 0), 0.4)) without (component, sensor))",
           "instant": true,
           "legendFormat": "~room",
           "refId": "A"
@@ -814,7 +814,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Comparison chart: Raw air intake temperature at bottom chassis grille (Inlet Air TA0V) vs estimated room ambient temperature (~Room) using differential thermodynamic gradient.",
+      "description": "Intake air temperature measured directly at bottom chassis grille (Inlet Air TA0V) reflecting the cooling air environment at the iMac.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -936,7 +936,7 @@
       },
       "targets": [
         {
-          "expr": "thermal_room_temperature_celsius or thermal_estimated_ambient_temperature_celsius",
+          "expr": "thermal_room_temperature_celsius or ((thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} + clamp_max(clamp_min((23.5 - thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}) / 2.0 * 0.4, 0), 0.4)) without (component, sensor))",
           "legendFormat": "~room (estimated)",
           "refId": "A"
         },
@@ -1190,5 +1190,5 @@
   "timezone": "browser",
   "title": "C\u1ea3m bi\u1ebfn nhi\u1ec7t \u0111\u1ed9 iMac",
   "uid": "imac-thermal",
-  "version": 10
+  "version": 12
 }

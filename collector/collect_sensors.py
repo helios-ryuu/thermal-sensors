@@ -224,7 +224,7 @@ def collect_measurements(data, lines):
             read_feature(apple, raw_sensor, ("_input",)),
         )
 
-    # --- THUẬT TOÁN ĐO NHIỆT ĐỘ PHÒNG ĐỘNG HỌC (DYNAMIC THERMAL GRADIENT AMBIENT) ---
+    # --- ĐO NHIỆT ĐỘ KHÍ NẠP & ƯỚC TÍNH NHIỆT ĐỘ PHÒNG ĐỘNG HỌC ---
     air_intake = read_feature(apple, "TA0V", ("_input",))
     fan_speed = read_feature(apple, "Main", ("_input",))
     cpu_pkg = read_feature(cpu, "Package id 0", ("_input",))
@@ -238,28 +238,30 @@ def collect_measurements(data, lines):
         now_ts = time.time()
         dt_rate = calculate_intake_rate_of_change(now_ts, air_intake)
 
-        # 1. Biến thiên nhiệt động học (Dynamic Thermal Gradient: dT/dt)
-        # Quán tính nhiệt của cảm biến tau ~ 0.5 phút, phản ánh xu hướng môi trường
-        tau = 0.5
-        gradient_adj = max(-0.6, min(0.6, tau * dt_rate))
+        # 1. Quán tính trễ vi phân (Thermal inertia of thermistor sensor: tau ~ 0.5 min)
+        # Giới hạn chặt: [-0.3°C, +0.3°C]
+        gradient_adj = max(-0.3, min(0.3, 0.5 * dt_rate))
 
-        # 2. Bù trừ truyền nhiệt vỏ nhôm (Chassis thermal leakage - biên độ nhỏ: 0.2°C - 0.6°C)
-        if fan_speed and fan_speed >= 1800:
-            base_leakage = 0.2
-        elif fan_speed and fan_speed >= 1400:
-            base_leakage = 0.3
+        # 2. Phân tầng khí lạnh theo độ cao (Cold air stratification / buoyancy)
+        # Khí lạnh điều hòa chìm sát mặt bàn, không khí ngang tầm người ngồi cao hơn 0.0 - 0.4°C
+        if air_intake <= 21.5:
+            strat_adj = 0.4
+        elif air_intake >= 23.5:
+            strat_adj = 0.0
         else:
-            base_leakage = 0.4
+            strat_adj = 0.4 * ((23.5 - air_intake) / 2.0)
 
+        # 3. Bù trừ nhiệt dẫn qua khung vỏ khi máy tải rất nặng (CPU/GPU > 55°C)
         load_penalty = 0.0
         if cpu_pkg and cpu_pkg > 55.0:
-            load_penalty += (cpu_pkg - 55.0) * 0.015
+            load_penalty += (cpu_pkg - 55.0) * 0.01
         if gpu_temp and gpu_temp > 55.0:
-            load_penalty += (gpu_temp - 55.0) * 0.015
-        load_penalty = min(0.3, load_penalty)
+            load_penalty += (gpu_temp - 55.0) * 0.01
+        load_penalty = min(0.2, load_penalty)
 
-        chassis_offset = base_leakage + load_penalty
-        ambient = round(air_intake + gradient_adj - chassis_offset, 1)
+        # Tổng hợp offset động, kẹp cứng tuyệt đối trong [-0.6°C, +0.6°C] (không vượt quá 1°C)
+        delta_dynamic = max(-0.6, min(0.6, gradient_adj + strat_adj - load_penalty))
+        ambient = round(air_intake + delta_dynamic, 1)
     else:
         # Fallback an toàn nếu mất cảm biến TA0V
         candidates = []
