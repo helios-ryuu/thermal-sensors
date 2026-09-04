@@ -11,6 +11,11 @@
       "title": "Tài nguyên hệ thống",
       "type": "dashboard",
       "url": "/d/system-resources"
+    },
+    {
+      "title": "Mạng & Bảo mật",
+      "type": "dashboard",
+      "url": "/d/network-security"
     }
   ],
   "panels": [

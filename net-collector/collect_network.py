@@ -1,0 +1,885 @@
+#!/usr/bin/env python3
+"""
+Bộ thu thập dữ liệu Mạng & Bảo mật (Network & Security Collector)
+Dành cho Ubuntu iMac trong hệ thống thermal-sensors stack.
+Thu thập:
+- Topology mạng (Interfaces, Subnets, Gateway, DNS)
+- NAT & CGNAT & Double NAT & Symmetric NAT detection
+- Danh sách thiết bị hợp nhất (Unified Device Inventory: LAN + Tailscale)
+- Cổng đang mở lắng nghe & Các kết nối hoạt động
+- Quy tắc tường lửa iptables & Cấu hình an ninh kernel sysctl
+- Chất lượng đường truyền (Ping latency)
+"""
+
+import argparse
+import http.client
+import ipaddress
+import json
+import math
+import os
+import re
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from urllib.parse import urlparse
+
+OUTPUT = os.environ.get("METRICS_OUTPUT_PATH", "/textfile/network_metrics.prom")
+TAILSCALE_SOCK = os.environ.get("TAILSCALE_SOCKET_PATH", "/var/run/tailscale/tailscaled.sock")
+FAST_INTERVAL = float(os.environ.get("COLLECTOR_FAST_INTERVAL", "15"))
+SLOW_INTERVAL = float(os.environ.get("COLLECTOR_SLOW_INTERVAL", "120"))
+
+# Cache cho các phép kiểm tra chậm (NAT, STUN, traceroute)
+slow_cache = {
+    "last_run": 0.0,
+    "cgnat": 0,
+    "symmetric": 0,
+    "double_nat": 0,
+    "hairpinning": 0,
+    "public_ipv4": "unknown",
+    "isp": "unknown",
+    "ping_gateway": None,
+    "ping_dns": None,
+    "ping_internet": None,
+    "ping_derp": None,
+}
+
+
+def prometheus_escape(value):
+    """Thoát các ký tự đặc biệt theo chuẩn Prometheus label value."""
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def add_sample(lines, metric, value, labels=None):
+    """Thêm một dòng metric Prometheus."""
+    label_str = ""
+    if labels:
+        label_str = "{" + ",".join(
+            f'{k}="{prometheus_escape(v)}"' for k, v in sorted(labels.items())
+        ) + "}"
+    lines.append(f"{metric}{label_str} {value}")
+
+
+def is_rfc1918_private(ip_str):
+    """Kiểm tra IP có thuộc dải mạng nội bộ private RFC 1918 hay không."""
+    try:
+        ip = ipaddress.ip_address(ip_str.strip())
+        return ip.is_private and not ip.is_loopback
+    except ValueError:
+        return False
+
+
+def is_rfc6598_cgnat(ip_str):
+    """Kiểm tra IP có thuộc dải CGNAT 100.64.0.0/10 hay không."""
+    try:
+        ip = ipaddress.ip_address(ip_str.strip())
+        cgnat_net = ipaddress.ip_network("100.64.0.0/10")
+        return ip in cgnat_net
+    except ValueError:
+        return False
+
+
+def query_tailscale_localapi(endpoint="/localapi/v0/status"):
+    """Giao tiếp với Tailscale daemon qua Unix Domain Socket."""
+    if not os.path.exists(TAILSCALE_SOCK):
+        return None
+
+    class UnixSocketHTTPConnection(http.client.HTTPConnection):
+        def __init__(self, sock_path):
+            super().__init__("localhost")
+            self.sock_path = sock_path
+
+        def connect(self):
+            self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.sock.settimeout(5.0)
+            self.sock.connect(self.sock_path)
+
+    try:
+        conn = UnixSocketHTTPConnection(TAILSCALE_SOCK)
+        conn.request("GET", endpoint, headers={"Host": "local-tailscaled.sock"})
+        resp = conn.getresponse()
+        if resp.status == 200:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw)
+    except Exception:
+        pass
+    return None
+
+
+def get_default_gateway_and_routes():
+    """Lấy thông tin Default Gateway từ route của hệ thống."""
+    gateway_ip = None
+    gateway_dev = None
+    try:
+        out = subprocess.run(
+            ["ip", "-j", "route", "show", "default"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            routes = json.loads(out.stdout)
+            if routes and isinstance(routes, list):
+                first = routes[0]
+                gateway_ip = first.get("gateway")
+                gateway_dev = first.get("dev")
+    except Exception:
+        pass
+
+    # Fallback đọc từ /proc/net/route nếu ip route lỗi
+    if not gateway_ip and os.path.exists("/proc/net/route"):
+        try:
+            with open("/proc/net/route", "r", encoding="utf-8") as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) >= 3 and parts[1] == "00000000":
+                        gateway_dev = parts[0]
+                        hex_gw = parts[2]
+                        # Chuyển hex little-endian sang IPv4
+                        octets = [str(int(hex_gw[i : i + 2], 16)) for i in (6, 4, 2, 0)]
+                        gateway_ip = ".".join(octets)
+                        break
+        except Exception:
+            pass
+
+    return gateway_ip, gateway_dev
+
+
+def get_dns_servers():
+    """Đọc danh sách DNS nameservers từ /etc/resolv.conf."""
+    servers = []
+    if os.path.exists("/etc/resolv.conf"):
+        try:
+            with open("/etc/resolv.conf", "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("nameserver") and len(line.split()) >= 2:
+                        servers.append(line.split()[1])
+        except Exception:
+            pass
+    return servers
+
+
+def get_network_interfaces():
+    """Lấy danh sách interfaces, IP, MTU từ `ip -j addr`."""
+    interfaces = []
+    try:
+        out = subprocess.run(
+            ["ip", "-j", "addr"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            data = json.loads(out.stdout)
+            for item in data:
+                ifname = item.get("ifname", "")
+                if not ifname or ifname == "lo":
+                    continue
+                operstate = item.get("operstate", "UNKNOWN")
+                mtu = item.get("mtu", 1500)
+                ip_list = []
+                for a in item.get("addr_info", []):
+                    if a.get("family") == "inet":
+                        ip_list.append(f"{a.get('local')}/{a.get('prefixlen')}")
+                interfaces.append({
+                    "name": ifname,
+                    "state": operstate,
+                    "mtu": mtu,
+                    "ips": ip_list,
+                })
+    except Exception:
+        pass
+    return interfaces
+
+
+def get_arp_neighbors():
+    """Lấy danh sách thiết bị trong mạng LAN từ bảng ARP (/proc/net/arp hoặc ip neigh)."""
+    devices = []
+    try:
+        out = subprocess.run(
+            ["ip", "-j", "neigh"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            data = json.loads(out.stdout)
+            for n in data:
+                ip = n.get("dst")
+                mac = n.get("lladdr")
+                dev = n.get("dev", "")
+                state = " ".join(n.get("state", []))
+                if ip and mac and mac != "00:00:00:00:00:00":
+                    is_reachable = any(s in state for s in ["REACHABLE", "PERMANENT", "DELAY", "PROBE"])
+                    devices.append({
+                        "ip": ip,
+                        "mac": mac,
+                        "dev": dev,
+                        "reachable": is_reachable,
+                    })
+            return devices
+    except Exception:
+        pass
+
+    # Fallback /proc/net/arp
+    if os.path.exists("/proc/net/arp"):
+        try:
+            with open("/proc/net/arp", "r", encoding="utf-8") as f:
+                lines = f.readlines()[1:]
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        ip, _, _, mac, _, dev = parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+                        if mac != "00:00:00:00:00:00":
+                            devices.append({
+                                "ip": ip,
+                                "mac": mac,
+                                "dev": dev,
+                                "reachable": True,
+                            })
+        except Exception:
+            pass
+    return devices
+
+
+def detect_stun_nat_mapping():
+    """
+    Kiểm tra kiểu NAT (Cone vs Symmetric NAT) bằng STUN RFC 5389 thuần Python.
+    Gửi Binding Request từ cùng một local UDP socket đến 2 máy chủ STUN của Google.
+    Nếu cổng ngoại mạng (mapped port) bằng nhau => Cone NAT. Nếu khác nhau => Symmetric NAT.
+    """
+    stun_servers = [("stun.l.google.com", 19302), ("stun1.l.google.com", 19302)]
+    mapped_ports = []
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(2.0)
+    try:
+        # Binding request header (20 bytes): Type 0x0001, Length 0, Magic Cookie 0x2112A442, Transaction ID (12 bytes)
+        req = b"\x00\x01\x00\x00\x21\x12\xa4\x42" + os.urandom(12)
+        for host, port in stun_servers:
+            try:
+                sock.sendto(req, (host, port))
+                data, _ = sock.recvfrom(512)
+                # Parse XOR-MAPPED-ADDRESS attribute (0x0020)
+                if len(data) > 20:
+                    pos = 20
+                    while pos + 4 <= len(data):
+                        attr_type = int.from_bytes(data[pos : pos + 2], "big")
+                        attr_len = int.from_bytes(data[pos + 2 : pos + 4], "big")
+                        pos += 4
+                        if attr_type == 0x0020 and attr_len >= 8:
+                            # XOR port = port ^ 0x2112
+                            raw_port = int.from_bytes(data[pos + 2 : pos + 4], "big")
+                            x_port = raw_port ^ 0x2112
+                            mapped_ports.append(x_port)
+                            break
+                        pos += attr_len
+            except Exception:
+                pass
+    finally:
+        sock.close()
+
+    if len(mapped_ports) >= 2:
+        # Nếu mapped port thay đổi khi đích đổi => Symmetric NAT
+        is_symmetric = 1 if mapped_ports[0] != mapped_ports[1] else 0
+        return is_symmetric
+    return 0
+
+
+def detect_double_nat_and_cgnat(gateway_ip):
+    """
+    Dùng traceroute ngắn (max 3 hops) để phát hiện Double NAT và CGNAT.
+    - Double NAT: Cả hop 1 và hop 2 đều là private RFC 1918.
+    - CGNAT: Hop 2 hoặc WAN nằm trong 100.64.0.0/10.
+    """
+    double_nat = 0
+    cgnat = 0
+    try:
+        out = subprocess.run(
+            ["traceroute", "-n", "-m", "3", "-w", "1", "-q", "1", "1.1.1.1"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+        if out.returncode == 0:
+            lines = out.stdout.strip().splitlines()
+            hops = []
+            for line in lines[1:]:
+                parts = line.strip().split()
+                if len(parts) >= 2 and parts[0].isdigit():
+                    hop_ip = parts[1]
+                    if hop_ip != "*":
+                        hops.append(hop_ip)
+
+            if len(hops) >= 2:
+                hop1, hop2 = hops[0], hops[1]
+                # Nếu hop 1 và hop 2 đều là Private IP nội bộ -> Double NAT
+                if is_rfc1918_private(hop1) and is_rfc1918_private(hop2):
+                    double_nat = 1
+                # Nếu hop 2 thuộc dải 100.64.0.0/10 -> CGNAT
+                if is_rfc6598_cgnat(hop2):
+                    cgnat = 1
+    except Exception:
+        pass
+
+    return double_nat, cgnat
+
+
+def ping_target(target):
+    """Đo độ trễ (latency ms) đến một IP mục tiêu bằng ping 1 gói."""
+    if not target:
+        return None
+    try:
+        out = subprocess.run(
+            ["ping", "-c", "1", "-W", "1", str(target)],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if out.returncode == 0:
+            match = re.search(r"time=([0-9.]+)\s*ms", out.stdout)
+            if match:
+                return float(match.group(1))
+    except Exception:
+        pass
+    return None
+
+
+def get_public_ip_and_isp():
+    """Lấy thông tin IP Public và ISP (fallback nhẹ nhàng)."""
+    public_ip = "unknown"
+    isp = "unknown"
+    try:
+        out = subprocess.run(
+            ["curl", "-s", "--max-time", "3", "https://ifconfig.co/json"],
+            capture_output=True,
+            text=True,
+            timeout=4,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            d = json.loads(out.stdout)
+            public_ip = d.get("ip", "unknown")
+            isp = d.get("asn_org", d.get("isp", "unknown"))
+    except Exception:
+        pass
+    return public_ip, isp
+
+
+def get_open_listening_ports():
+    """Lấy danh sách các cổng đang mở lắng nghe bằng `ss -tulpn`."""
+    ports = []
+    try:
+        out = subprocess.run(
+            ["ss", "-H", "-tulpn"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode == 0:
+            for line in out.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 5:
+                    proto = parts[0].lower()
+                    local_addr = parts[4]
+                    proc_info = parts[6] if len(parts) >= 7 else "-"
+
+                    # Tách IP và Port
+                    if ":" in local_addr:
+                        r_idx = local_addr.rfind(":")
+                        ip_part = local_addr[:r_idx].strip("[]* ")
+                        port_part = local_addr[r_idx + 1 :]
+
+                        # Phân loại mức độ phơi nhiễm (Exposure)
+                        if not ip_part or ip_part in ["0.0.0.0", "::"]:
+                            exposure = "Public / LAN"
+                        elif ip_part.startswith("100."):
+                            exposure = "Tailscale Only"
+                        elif ip_part in ["127.0.0.1", "::1"]:
+                            exposure = "Localhost Only"
+                        else:
+                            exposure = "Specific LAN"
+
+                        # Trích xuất process name
+                        proc_match = re.search(r'"([^"]+)"', proc_info)
+                        service_name = proc_match.group(1) if proc_match else proc_info
+
+                        ports.append({
+                            "proto": proto,
+                            "port": port_part,
+                            "bind_ip": ip_part or "0.0.0.0",
+                            "exposure": exposure,
+                            "service": service_name,
+                        })
+    except Exception:
+        pass
+    return ports
+
+
+def get_active_connections():
+    """Lấy danh sách các kết nối đang thông suốt (ESTABLISHED) bằng `ss -tan`."""
+    conns = []
+    state_counts = {}
+    try:
+        out = subprocess.run(
+            ["ss", "-H", "-tan"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode == 0:
+            for line in out.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 5:
+                    state = parts[0].upper()
+                    state_counts[state] = state_counts.get(state, 0) + 1
+
+                    if state == "ESTAB":
+                        local = parts[3]
+                        remote = parts[4]
+                        l_port = local.rsplit(":", 1)[-1] if ":" in local else local
+                        if ":" in remote:
+                            r_ip, r_port = remote.rsplit(":", 1)
+                            r_ip = r_ip.strip("[]")
+                            conns.append({
+                                "proto": "tcp",
+                                "local_port": l_port,
+                                "remote_ip": r_ip,
+                                "remote_port": r_port,
+                                "state": "ESTABLISHED",
+                            })
+    except Exception:
+        pass
+    return state_counts, conns[:25]  # Giới hạn 25 kết nối tiêu biểu để tránh quá tải
+
+
+def get_firewall_rules_and_policies():
+    """Lấy danh sách các quy tắc iptables chính và default policy."""
+    policies = {"INPUT": "ACCEPT", "FORWARD": "ACCEPT", "OUTPUT": "ACCEPT"}
+    rules = []
+    try:
+        out = subprocess.run(
+            ["iptables", "-L", "-v", "-n"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if out.returncode == 0:
+            current_chain = ""
+            for line in out.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("Chain "):
+                    # Chain INPUT (policy DROP 12 packets, 450 bytes)
+                    m = re.match(r"Chain\s+([A-Z0-9_-]+)\s+\(policy\s+([A-Z]+)", line)
+                    if m:
+                        current_chain = m.group(1)
+                        if current_chain in policies:
+                            policies[current_chain] = m.group(2)
+                    else:
+                        current_chain = line.split()[1]
+                    continue
+
+                # Bỏ qua các chain nội bộ Docker để bảng rule sạch sẽ
+                if current_chain.startswith("DOCKER") or current_chain in ["br-", "veth"]:
+                    continue
+
+                parts = line.split()
+                if len(parts) >= 9 and parts[0].isdigit():
+                    pkts = parts[0]
+                    bytes_cnt = parts[1]
+                    target = parts[2]
+                    proto = parts[3]
+                    in_if = parts[5]
+                    out_if = parts[6]
+                    source = parts[7]
+                    dest = parts[8]
+                    extra = " ".join(parts[9:]) if len(parts) > 9 else "-"
+
+                    rules.append({
+                        "chain": current_chain,
+                        "target": target,
+                        "proto": proto,
+                        "in": in_if,
+                        "out": out_if,
+                        "source": source,
+                        "dest": dest,
+                        "pkts": pkts,
+                        "bytes": bytes_cnt,
+                        "extra": extra,
+                    })
+    except Exception:
+        pass
+    return policies, rules[:30]
+
+
+def get_kernel_security_settings():
+    """Đọc các thiết lập an ninh mạng sysctl từ /proc/sys/net/ipv4."""
+    base = "/proc/sys/net/ipv4"
+    if not os.path.exists(base) and os.path.exists("/host/proc/sys/net/ipv4"):
+        base = "/host/proc/sys/net/ipv4"
+
+    settings = {
+        "ip_forward": 0,
+        "tcp_syncookies": 1,
+        "accept_redirects": 0,
+        "rp_filter": 1,
+    }
+
+    def read_val(rel_path):
+        p = os.path.join(base, rel_path)
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return int(f.read().strip())
+            except Exception:
+                pass
+        return None
+
+    v = read_val("ip_forward")
+    if v is not None:
+        settings["ip_forward"] = v
+
+    v = read_val("tcp_syncookies")
+    if v is not None:
+        settings["tcp_syncookies"] = v
+
+    v = read_val("conf/all/accept_redirects")
+    if v is not None:
+        settings["accept_redirects"] = v
+
+    v = read_val("conf/all/rp_filter")
+    if v is not None:
+        settings["rp_filter"] = v
+
+    return settings
+
+
+def collect_network_metrics(lines):
+    """Hàm thu thập tổng hợp toàn bộ thông số mạng và bảo mật."""
+    now = time.time()
+    gateway_ip, gateway_dev = get_default_gateway_and_routes()
+    dns_servers = get_dns_servers()
+
+    # 1. Cập nhật các kiểm tra chậm (chạy mỗi SLOW_INTERVAL = 120s)
+    if now - slow_cache["last_run"] >= SLOW_INTERVAL:
+        slow_cache["last_run"] = now
+
+        # Kiểm tra Tailscale status & netcheck
+        ts_status = query_tailscale_localapi("/localapi/v0/status")
+        if ts_status:
+            slow_cache["hairpinning"] = 1 if ts_status.get("HairPinning") else 0
+            if "MappingVariesByDestIP" in ts_status:
+                slow_cache["symmetric"] = 1 if ts_status.get("MappingVariesByDestIP") else 0
+            else:
+                slow_cache["symmetric"] = detect_stun_nat_mapping()
+        else:
+            slow_cache["symmetric"] = detect_stun_nat_mapping()
+
+        # Kiểm tra Double NAT & CGNAT qua traceroute
+        d_nat, cgnat_hop = detect_double_nat_and_cgnat(gateway_ip)
+        slow_cache["double_nat"] = d_nat
+
+        # Lấy public IP
+        pub_ip, isp_name = get_public_ip_and_isp()
+        slow_cache["public_ipv4"] = pub_ip
+        slow_cache["isp"] = isp_name
+
+        # Đánh giá CGNAT: nếu WAN IP hoặc hop 2 nằm trong 100.64.0.0/10
+        if is_rfc6598_cgnat(pub_ip) or cgnat_hop == 1:
+            slow_cache["cgnat"] = 1
+        else:
+            slow_cache["cgnat"] = 0
+
+        # Đo ping latency
+        if gateway_ip:
+            slow_cache["ping_gateway"] = ping_target(gateway_ip)
+        if dns_servers:
+            slow_cache["ping_dns"] = ping_target(dns_servers[0])
+        slow_cache["ping_internet"] = ping_target("1.1.1.1")
+
+    # 2. Xuất metric NAT & WAN
+    add_sample(lines, "net_nat_is_cgnat", slow_cache["cgnat"])
+    add_sample(lines, "net_nat_is_symmetric", slow_cache["symmetric"])
+    add_sample(lines, "net_nat_is_double_nat", slow_cache["double_nat"])
+    add_sample(lines, "net_nat_hairpinning", slow_cache["hairpinning"])
+    add_sample(
+        lines,
+        "net_wan_info",
+        1,
+        {"public_ipv4": slow_cache["public_ipv4"], "isp": slow_cache["isp"]},
+    )
+
+    # 3. Xuất Gateway & DNS
+    gw_mac = "unknown"
+    arp_entries = get_arp_neighbors()
+    if gateway_ip:
+        for a in arp_entries:
+            if a["ip"] == gateway_ip:
+                gw_mac = a["mac"]
+                break
+        add_sample(
+            lines,
+            "net_gateway_info",
+            1,
+            {"gateway_ip": gateway_ip, "interface": gateway_dev or "unknown", "gateway_mac": gw_mac},
+        )
+
+    for idx, dns in enumerate(dns_servers[:3]):
+        add_sample(lines, "net_dns_server_info", 1, {"dns_ip": dns, "priority": str(idx + 1)})
+
+    # 4. Xuất Latency
+    if slow_cache["ping_gateway"] is not None:
+        add_sample(lines, "net_ping_latency_ms", slow_cache["ping_gateway"], {"target": "gateway"})
+    if slow_cache["ping_dns"] is not None:
+        add_sample(lines, "net_ping_latency_ms", slow_cache["ping_dns"], {"target": "dns"})
+    if slow_cache["ping_internet"] is not None:
+        add_sample(lines, "net_ping_latency_ms", slow_cache["ping_internet"], {"target": "internet"})
+
+    # 5. Xuất Topology Interfaces
+    for iface in get_network_interfaces():
+        ip_summary = ", ".join(iface["ips"]) if iface["ips"] else "no-ip"
+        add_sample(
+            lines,
+            "net_interface_info",
+            1,
+            {
+                "name": iface["name"],
+                "state": iface["state"],
+                "mtu": str(iface["mtu"]),
+                "ips": ip_summary,
+            },
+        )
+
+    # 6. Kho Thiết bị Hợp nhất (Unified Device Inventory: LAN + Tailscale)
+    # Thiết bị LAN
+    for a in arp_entries:
+        status = "reachable" if a["reachable"] else "stale"
+        add_sample(
+            lines,
+            "net_device_info",
+            1,
+            {
+                "network": "LAN",
+                "name": f"lan-{a['ip'].replace('.', '-')}",
+                "ip": a["ip"],
+                "identifier": a["mac"],
+                "status": status,
+                "link_type": "direct",
+            },
+        )
+
+    # Thiết bị Tailscale
+    ts_status = query_tailscale_localapi("/localapi/v0/status")
+    if ts_status:
+        ts_self = ts_status.get("Self", {})
+        add_sample(
+            lines,
+            "net_tailscale_status",
+            1 if ts_self.get("Online") else 0,
+            {
+                "hostname": ts_self.get("HostName", "unknown"),
+                "tailscale_ip": ts_self.get("TailscaleIPs", [""])[0],
+                "os": ts_self.get("OS", "linux"),
+            },
+        )
+
+        peers = ts_status.get("Peer", {})
+        for _, p in peers.items():
+            name = p.get("HostName", "unknown")
+            ip = p.get("TailscaleIPs", [""])[0]
+            status = "online" if p.get("Online") else "offline"
+            link = "direct" if p.get("CurAddr") else f"relay-{p.get('Relay', 'derp')}"
+            add_sample(
+                lines,
+                "net_device_info",
+                1,
+                {
+                    "network": "Tailscale",
+                    "name": name,
+                    "ip": ip,
+                    "identifier": p.get("OS", "node"),
+                    "status": status,
+                    "link_type": link,
+                },
+            )
+
+    # 7. Cổng mở lắng nghe & Kết nối
+    open_ports = get_open_listening_ports()
+    for p in open_ports:
+        add_sample(
+            lines,
+            "net_listening_port_info",
+            1,
+            {
+                "proto": p["proto"],
+                "port": str(p["port"]),
+                "bind_ip": p["bind_ip"],
+                "exposure": p["exposure"],
+                "service": p["service"],
+            },
+        )
+
+    state_counts, active_conns = get_active_connections()
+    for st, count in state_counts.items():
+        add_sample(lines, "net_active_connections_total", count, {"state": st})
+
+    for c in active_conns:
+        add_sample(
+            lines,
+            "net_active_connection_info",
+            1,
+            {
+                "proto": c["proto"],
+                "local_port": str(c["local_port"]),
+                "remote_ip": c["remote_ip"],
+                "remote_port": str(c["remote_port"]),
+                "state": c["state"],
+            },
+        )
+
+    # 8. Firewall & iptables rules
+    policies, rules = get_firewall_rules_and_policies()
+    for chain, pol in policies.items():
+        add_sample(lines, "net_firewall_default_policy", 1, {"chain": chain, "policy": pol})
+
+    for r in rules:
+        add_sample(
+            lines,
+            "net_firewall_rule_info",
+            1,
+            {
+                "chain": r["chain"],
+                "target": r["target"],
+                "proto": r["proto"],
+                "source": r["source"],
+                "dest": r["dest"],
+                "packets": str(r["pkts"]),
+                "bytes": str(r["bytes"]),
+                "extra": r["extra"][:40],
+            },
+        )
+
+    # 9. An ninh Kernel sysctl
+    sec = get_kernel_security_settings()
+    add_sample(lines, "net_security_setting", sec["ip_forward"], {"setting": "ip_forward"})
+    add_sample(lines, "net_security_setting", sec["tcp_syncookies"], {"setting": "tcp_syncookies"})
+    add_sample(lines, "net_security_setting", sec["accept_redirects"], {"setting": "accept_redirects"})
+    add_sample(lines, "net_security_setting", sec["rp_filter"], {"setting": "rp_filter"})
+
+
+def write_atomic(lines, output_path=None):
+    """Ghi đè file metric nguyên tử để tránh Prometheus đọc dở dang."""
+    target_path = output_path or OUTPUT
+    directory = os.path.dirname(target_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    fd, temporary_path = tempfile.mkstemp(prefix=".net_metrics.", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as output:
+            output.write("\n".join(lines) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary_path, 0o644)
+        os.replace(temporary_path, target_path)
+    finally:
+        if os.path.exists(temporary_path):
+            try:
+                os.unlink(temporary_path)
+            except OSError:
+                pass
+
+
+def collect_once(output_path=None):
+    """Thực hiện một chu kỳ thu thập."""
+    lines = [
+        "# HELP net_collector_success Trang thai thu thap metric mang gan nhat.",
+        "# TYPE net_collector_success gauge",
+        "# HELP net_collector_timestamp_seconds Thoi diem thu thap metric mang Unix.",
+        "# TYPE net_collector_timestamp_seconds gauge",
+        "# HELP net_nat_is_cgnat May co dang o sau mang CGNAT khong (1=co, 0=khong).",
+        "# TYPE net_nat_is_cgnat gauge",
+        "# HELP net_nat_is_symmetric Kieu NAT co phai Symmetric NAT khong (1=co, 0=Cone).",
+        "# TYPE net_nat_is_symmetric gauge",
+        "# HELP net_nat_is_double_nat Co phat hien Double NAT da tang router khong (1=co, 0=khong).",
+        "# TYPE net_nat_is_double_nat gauge",
+        "# HELP net_nat_hairpinning Router co ho tro NAT Loopback khong (1=co, 0=khong).",
+        "# TYPE net_nat_hairpinning gauge",
+        "# HELP net_wan_info Thong tin dia chi IP Public va nha mang ISP ngoai.",
+        "# TYPE net_wan_info gauge",
+        "# HELP net_gateway_info Thong tin Default Gateway IP va MAC.",
+        "# TYPE net_gateway_info gauge",
+        "# HELP net_dns_server_info Thong tin DNS nameservers.",
+        "# TYPE net_dns_server_info gauge",
+        "# HELP net_ping_latency_ms Do tre ping den cac dich muc tieu.",
+        "# TYPE net_ping_latency_ms gauge",
+        "# HELP net_interface_info Danh sach cac card mang host.",
+        "# TYPE net_interface_info gauge",
+        "# HELP net_device_info Danh sach thiet bi hop nhat trong LAN va Tailscale.",
+        "# TYPE net_device_info gauge",
+        "# HELP net_tailscale_status Trang thai ket noi Tailscale cua may.",
+        "# TYPE net_tailscale_status gauge",
+        "# HELP net_listening_port_info Cac cong mo dang lang nghe tren may.",
+        "# TYPE net_listening_port_info gauge",
+        "# HELP net_active_connections_total Tong so ket noi theo trang thai.",
+        "# TYPE net_active_connections_total gauge",
+        "# HELP net_active_connection_info Danh sach cac ket noi dang thong suot.",
+        "# TYPE net_active_connection_info gauge",
+        "# HELP net_firewall_default_policy Chinh sach mac dinh cua cac chain iptables.",
+        "# TYPE net_firewall_default_policy gauge",
+        "# HELP net_firewall_rule_info Quy tac tuong lua iptables.",
+        "# TYPE net_firewall_rule_info gauge",
+        "# HELP net_security_setting Thiet lap bao mat mang kernel sysctl.",
+        "# TYPE net_security_setting gauge",
+    ]
+    add_sample(lines, "net_collector_success", 1)
+    add_sample(lines, "net_collector_timestamp_seconds", time.time())
+    try:
+        collect_network_metrics(lines)
+    except Exception as e:
+        print(f"Lỗi thu thập mạng: {e}", file=sys.stderr)
+        add_sample(lines, "net_collector_success", 0)
+
+    write_atomic(lines, output_path)
+    return 0
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Network & Security Metrics Collector")
+    parser.add_argument("--loop", action="store_true", help="Chạy vòng lặp định kỳ liên tục")
+    parser.add_argument("--oneshot", action="store_true", help="Chạy một lần duy nhất rồi thoát")
+    parser.add_argument("--output", default=OUTPUT, help="Đường dẫn file .prom đầu ra")
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=FAST_INTERVAL,
+        help="Chu kỳ thu thập tính bằng giây",
+    )
+    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+
+    should_loop = args.loop or (not args.oneshot and os.environ.get("COLLECTOR_LOOP", "1") == "1")
+
+    if not should_loop:
+        return collect_once(args.output)
+
+    running = True
+
+    def handle_signal(sig, _):
+        nonlocal running
+        print(f"Nhận tín hiệu {sig}, đang dừng collector...", file=sys.stderr)
+        running = False
+
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    print(f"Bắt đầu network collector vòng lặp mỗi {args.interval}s, xuất {args.output}")
+    while running:
+        collect_once(args.output)
+        time.sleep(args.interval)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+

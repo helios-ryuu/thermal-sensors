@@ -46,16 +46,21 @@ if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ] || [ "${GRAFANA_ADMIN_PASSWORD}" = "chan
 fi
 
 # 4. Build và khởi động Docker Compose
-echo "[+] Đang build collector và khởi động Docker Compose..."
-docker compose build collector
+echo "[+] Đang build collectors (cảm biến & mạng) và khởi động Docker Compose..."
+docker compose build collector net-collector
 docker compose up -d
+
+TAILSCALE_IP="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
+DISPLAY_IP="${GRAFANA_BIND_IP:-${TAILSCALE_IP:-127.0.0.1}}"
 
 echo ""
 echo "======================================================"
 echo "              ✅ TRIỂN KHAI THÀNH CÔNG!              "
 echo "======================================================"
-echo "Grafana Dashboard : http://${GRAFANA_BIND_IP:-${TAILSCALE_IP}}:${GRAFANA_PORT:-3000}"
-echo "Truy cập qua mạng : Tailscale (${GRAFANA_BIND_IP:-${TAILSCALE_IP}}:${GRAFANA_PORT:-3000})"
+echo "Grafana Dashboard : http://${DISPLAY_IP}:${GRAFANA_PORT:-3000}"
+if [ -n "${TAILSCALE_IP}" ]; then
+    echo "Truy cập qua mạng : Tailscale (${TAILSCALE_IP}:${GRAFANA_PORT:-3000})"
+fi
 echo "User đăng nhập    : ${GRAFANA_ADMIN_USER:-admin}"
 echo "Mật khẩu Admin    : [Được cấu hình trong file .env]"
 echo "Prometheus Metric : http://${PROMETHEUS_BIND_IP:-127.0.0.1}:${PROMETHEUS_PORT:-9090}"

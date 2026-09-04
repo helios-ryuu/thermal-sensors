@@ -41,6 +41,12 @@
       "type": "dashboard",
       "url": "/d/system-health",
       "tooltip": "Xem dashboard sức khỏe hệ thống"
+    },
+    {
+      "title": "Mạng & Bảo mật",
+      "type": "dashboard",
+      "url": "/d/network-security",
+      "tooltip": "Xem dashboard mạng và bảo mật"
     }
   ],
   "panels": [

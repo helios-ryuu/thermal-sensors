@@ -1,44 +1,54 @@
-# Giám sát phần cứng và hệ thống iMac bằng Grafana & Docker Compose
+# Giám sát phần cứng, hệ thống & an ninh mạng iMac bằng Grafana & Docker Compose
 
-Stack giám sát toàn diện, nhẹ và đóng gói **100% bằng Docker Compose** cho máy Ubuntu chạy trên iMac. Hiển thị lịch sử nhiệt độ (CPU, GPU, PCH, NVMe, quạt Apple SMC, nhiệt độ phòng ~TA0V), toàn bộ tài nguyên hệ thống (CPU, RAM, Disk I/O, Network, TCP) và truy cập an toàn qua Tailscale.
+Stack giám sát toàn diện, nhẹ và đóng gói **100% bằng Docker Compose** cho máy Ubuntu chạy trên iMac. Hiển thị lịch sử nhiệt độ (CPU, GPU, PCH, NVMe, quạt Apple SMC, nhiệt độ phòng ~TA0V), toàn bộ tài nguyên hệ thống (CPU, RAM, Disk I/O, Network, TCP), an ninh mạng & tường lửa và truy cập an toàn qua Tailscale.
 
-Stack đi kèm **3 Dashboards Grafana** được nạp sẵn:
-1. **Cảm biến nhiệt độ iMac (`imac-thermal`)**: Chi tiết nhiệt độ các linh kiện, nhiệt độ phòng xấp xỉ (`TA0V - 0.8`), tốc độ quạt, công suất GPU và cấu hình `mbpfan`.
+Stack đi kèm **4 Dashboards Grafana** được nạp sẵn:
+1. **Cảm biến nhiệt độ iMac (`imac-thermal`)**: Chi tiết nhiệt độ các linh kiện, nhiệt độ phòng động học (`TA0V` bù trừ RPM và nhiệt CPU/GPU), tốc độ quạt, công suất GPU và cấu hình `mbpfan`.
 2. **Tài nguyên hệ thống (`system-resources`)**: Tải CPU (chi tiết theo mode), Load Average, phân bổ RAM, Disk I/O & IOPS, băng thông mạng & lỗi/drop gói.
 3. **Sức khỏe hệ thống (`system-health`)**: Uptime, số nhân CPU, tổng dung lượng RAM, phiên bản Kernel, trạng thái kết nối TCP (ESTABLISHED, TIME_WAIT...), TCP Retransmissions, Inode usage và bảng dung lượng Filesystem.
+4. **Mạng & Bảo mật (`network-security`)**: Giám sát CGNAT, Symmetric NAT, Double NAT, Topology các card mạng, kho thiết bị hợp nhất (LAN + Tailscale), các cổng mở lắng nghe, quy tắc tường lửa `iptables` và thiết lập bảo mật kernel.
 
 ---
 
 ## 🏗️ Kiến trúc hệ thống
 
 ```text
-Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
-       │ (read-only bind-mount)
+Host Network & Hardware (/proc, /sys, /var/run/tailscale/tailscaled.sock, iptables)
+       │ (network_mode: host, read-only bind-mounts)
        ▼
 ┌────────────────────────────────────────────────────────┐
 │ Docker Compose Network (thermal-monitoring)            │
 │                                                        │
-│  ┌──────────────────┐                                  │
-│  │ thermal-collector│ (Đọc sensors & mbpfan mỗi 10s)   │
-│  └────────┬─────────┘                                  │
-│           │ ghi metric textfile                        │
-│           ▼                                            │
-│  ┌──────────────────┐      ┌────────────────────────┐  │
-│  │  node-exporter   ├─────►│   thermal-prometheus   │  │
-│  │(Metric OS + Text)│      └───────────┬────────────┘  │
-│  └──────────────────┘                  │               │
-│                                        ▼               │
-│                            ┌────────────────────────┐  │
-│                            │    thermal-grafana     │  │
-│                            └───────────┬────────────┘  │
-└────────────────────────────────────────┼───────────────┘
-                                         ▼
-                               Tailscale Network
-                               (100.120.64.5:3000)
+│  ┌──────────────────────┐  ┌──────────────────────┐   │
+│  │  thermal-collector   │  │    net-collector     │   │
+│  │(Sensors & mbpfan 10s)│  │(Network & Sec 15s/2m)│   │
+│  └──────────┬───────────┘  └──────────┬───────────┘   │
+│             │                         │               │
+│             ▼                         ▼               │
+│      thermal_sensors.prom      network_metrics.prom   │
+│             │                         │               │
+│             └───────────┬─────────────┘               │
+│                         ▼ (Thư mục ~/.sens/textfile/) │
+│             ┌───────────────────────┐                 │
+│             │     node-exporter     │                 │
+│             └───────────┬───────────┘                 │
+│                         ▼                             │
+│             ┌───────────────────────┐                 │
+│             │  thermal-prometheus   │                 │
+│             └───────────┬────────────┘                │
+│                         ▼                             │
+│             ┌───────────────────────┐                 │
+│             │    thermal-grafana    │                 │
+│             │     (4 Dashboards)    │                 │
+│             └───────────┬───────────┘                 │
+└─────────────────────────┼─────────────────────────────┘
+                          ▼
+                  Tailscale Network
+                  (<TAILSCALE_IP>:3000)
 ```
 
 * **Dữ liệu tập trung (`~/.sens/`)**:
-  * `~/.sens/textfile/`: Chứa file metric trung gian `thermal_sensors.prom`.
+  * `~/.sens/textfile/`: Chứa file metric trung gian `thermal_sensors.prom` và `network_metrics.prom`.
   * `~/.sens/prometheus/`: Cơ sở dữ liệu time-series TSDB của Prometheus.
   * `~/.sens/grafana/`: Dữ liệu SQLite và cấu hình của Grafana.
 
@@ -73,11 +83,13 @@ Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
 | `SENS_DATA_DIR` | `/home/user/.sens` | Thư mục lưu trữ tập trung dữ liệu |
 | `GRAFANA_ADMIN_USER` | `admin` | Tên đăng nhập Admin Grafana |
 | `GRAFANA_ADMIN_PASSWORD` | `...` | Mật khẩu Admin Grafana (cấu hình trong `.env`) |
-| `GRAFANA_BIND_IP` | `<TAILSCALE_IP>` | IP publish của Grafana (Địa chỉ IP Tailscale của máy) |
+| `GRAFANA_BIND_IP` | `<TAILSCALE_IP>` | IP publish của Grafana (Địa chỉ IP Tailscale của máy hoặc 127.0.0.1) |
 | `GRAFANA_PORT` | `3000` | Port truy cập Grafana |
 | `PROMETHEUS_BIND_IP`| `127.0.0.1` | IP publish của Prometheus |
 | `PROMETHEUS_PORT` | `9090` | Port truy cập Prometheus |
-| `COLLECTOR_INTERVAL`| `10` | Chu kỳ thu thập cảm biến của collector (giây) |
+| `COLLECTOR_INTERVAL`| `10` | Chu kỳ thu thập cảm biến của thermal collector (giây) |
+| `NET_COLLECTOR_FAST_INTERVAL`| `15` | Chu kỳ thu thập nhanh của net-collector (giây) |
+| `NET_COLLECTOR_SLOW_INTERVAL`| `120` | Chu kỳ kiểm tra NAT/STUN/Traceroute của net-collector (giây) |
 | `PROMETHEUS_RETENTION_TIME` | `15d` | Thời gian lưu trữ dữ liệu metric |
 | `PROMETHEUS_RETENTION_SIZE` | `2GB` | Dung lượng tối đa của Prometheus TSDB |
 
@@ -85,7 +97,7 @@ Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
 
 ## 🛠️ Quản lý & Dọn dẹp
 
-* **Xem thông tin truy cập & metadata dữ liệu:**
+* **Xem thông tin truy cập & metadata dữ liệu (Cảm biến + Mạng + Dung lượng):**
   ```bash
   ./scripts/info.sh
   ```
@@ -93,7 +105,7 @@ Host Hardware (/proc, /sys, /, /etc/mbpfan.conf)
 * **Xem trạng thái container / log:**
   ```bash
   docker compose ps
-  docker compose logs -f collector
+  docker compose logs -f net-collector
   ```
 
 * **Dừng stack:**

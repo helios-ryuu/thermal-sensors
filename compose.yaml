@@ -19,6 +19,27 @@ services:
       - monitoring
     restart: unless-stopped
 
+  net-collector:
+    build:
+      context: ./net-collector
+      dockerfile: Dockerfile
+    image: thermal-net-collector:latest
+    container_name: thermal-net-collector
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro
+      - /proc:/host/proc:ro
+      - /etc/resolv.conf:/etc/resolv.conf:ro
+      - ${SENS_DATA_DIR:-./data}/textfile:/textfile
+    environment:
+      METRICS_OUTPUT_PATH: /textfile/network_metrics.prom
+      COLLECTOR_FAST_INTERVAL: ${NET_COLLECTOR_FAST_INTERVAL:-15}
+      COLLECTOR_SLOW_INTERVAL: ${NET_COLLECTOR_SLOW_INTERVAL:-120}
+    restart: unless-stopped
+
   node-exporter:
     image: prom/node-exporter:latest
     container_name: thermal-node-exporter
@@ -39,6 +60,7 @@ services:
       - no-new-privileges=true
     depends_on:
       - collector
+      - net-collector
     restart: unless-stopped
 
   prometheus:
@@ -66,7 +88,7 @@ services:
     image: grafana/grafana:latest
     container_name: thermal-grafana
     ports:
-      - "${GRAFANA_BIND_IP:-100.120.64.5}:${GRAFANA_PORT:-3000}:3000"
+      - "${GRAFANA_BIND_IP:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}

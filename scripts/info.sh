@@ -23,11 +23,8 @@ SENS_DATA_DIR="${SENS_DATA_DIR:-${HOME}/.sens}"
 
 # Tự động phát hiện IP Tailscale của máy
 TAILSCALE_IP="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
-if [ -z "${TAILSCALE_IP}" ]; then
-    TAILSCALE_IP="100.120.64.5"
-fi
 
-GRAFANA_IP="${GRAFANA_BIND_IP:-${TAILSCALE_IP}}"
+GRAFANA_IP="${GRAFANA_BIND_IP:-${TAILSCALE_IP:-127.0.0.1}}"
 GRAFANA_P="${GRAFANA_PORT:-3000}"
 PROM_IP="${PROMETHEUS_BIND_IP:-127.0.0.1}"
 PROM_P="${PROMETHEUS_PORT:-9090}"
@@ -95,6 +92,48 @@ if [ -f "${PROM_FILE}" ]; then
     [ -n "${CPU_PKG}" ] && echo "  • CPU Package              : ${CPU_PKG} °C"
     [ -n "${GPU_EDGE}" ] && echo "  • GPU Edge                 : ${GPU_EDGE} °C"
     [ -n "${FAN_RPM}" ] && echo "  • Tốc độ quạt (Main)       : ${FAN_RPM} RPM"
+fi
+
+NET_PROM_FILE="${SENS_DATA_DIR}/textfile/network_metrics.prom"
+if [ -f "${NET_PROM_FILE}" ]; then
+    NET_LAST_MOD=$(stat -c '%y' "${NET_PROM_FILE}" 2>/dev/null | cut -d'.' -f1 || stat -f "%Sm" "${NET_PROM_FILE}" 2>/dev/null || echo "N/A")
+    NET_METRIC_COUNT=$(grep -cv '^#' "${NET_PROM_FILE}" 2>/dev/null || echo "0")
+    
+    echo ""
+    echo "🌐 METADATA MẠNG & BẢO MẬT (Lần ghi gần nhất: ${NET_LAST_MOD}):"
+    echo "------------------------------------------------------"
+    echo "  • Tổng số mẫu metrics     : ${NET_METRIC_COUNT}"
+    
+    IS_CGNAT=$(grep '^net_nat_is_cgnat' "${NET_PROM_FILE}" 2>/dev/null | awk '{print $2}' || true)
+    IS_SYMMETRIC=$(grep '^net_nat_is_symmetric' "${NET_PROM_FILE}" 2>/dev/null | awk '{print $2}' || true)
+    IS_DOUBLE_NAT=$(grep '^net_nat_is_double_nat' "${NET_PROM_FILE}" 2>/dev/null | awk '{print $2}' || true)
+    WAN_INFO=$(grep '^net_wan_info{' "${NET_PROM_FILE}" 2>/dev/null | head -n 1 || true)
+    PUB_IP=$(echo "${WAN_INFO}" | sed -n 's/.*public_ipv4="\([^"]*\)".*/\1/p')
+    ISP=$(echo "${WAN_INFO}" | sed -n 's/.*isp="\([^"]*\)".*/\1/p')
+    GW_INFO=$(grep '^net_gateway_info{' "${NET_PROM_FILE}" 2>/dev/null | head -n 1 || true)
+    GW_IP=$(echo "${GW_INFO}" | sed -n 's/.*gateway_ip="\([^"]*\)".*/\1/p')
+    DEV_COUNT=$(grep -c '^net_device_info{' "${NET_PROM_FILE}" 2>/dev/null || echo "0")
+    OPEN_PORT_COUNT=$(grep -c '^net_listening_port_info{' "${NET_PROM_FILE}" 2>/dev/null || echo "0")
+
+    [ -n "${PUB_IP}" ] && echo "  • IP Public & ISP          : ${PUB_IP} (${ISP:-unknown})"
+    [ -n "${GW_IP}" ] && echo "  • Default Gateway          : ${GW_IP}"
+    if [ "${IS_CGNAT}" = "1" ]; then
+        echo "  • Trạng thái CGNAT         : Có (Behind CGNAT 100.64.0.0/10)"
+    else
+        echo "  • Trạng thái CGNAT         : Không (Public Direct)"
+    fi
+    if [ "${IS_SYMMETRIC}" = "1" ]; then
+        echo "  • Kiểu NAT                 : Symmetric NAT (Cần Relay)"
+    else
+        echo "  • Kiểu NAT                 : Cone NAT (P2P Friendly)"
+    fi
+    if [ "${IS_DOUBLE_NAT}" = "1" ]; then
+        echo "  • Double NAT               : Phát hiện (>= 2 Routers)"
+    else
+        echo "  • Double NAT               : Không (Single NAT)"
+    fi
+    echo "  • Thiết bị phát hiện       : ${DEV_COUNT} thiết bị (LAN + Tailscale)"
+    echo "  • Cổng mở đang lắng nghe   : ${OPEN_PORT_COUNT} cổng"
 fi
 
 echo ""
