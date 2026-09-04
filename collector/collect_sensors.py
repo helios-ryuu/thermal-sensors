@@ -2,6 +2,7 @@
 """Xuất các giá trị lm-sensors đã chọn theo định dạng Prometheus textfile."""
 
 import argparse
+import collections
 import json
 import math
 import os
@@ -158,6 +159,26 @@ def collect_mbpfan_config(lines, path=None):
     return True
 
 
+_intake_history = collections.deque(maxlen=20)
+
+
+def calculate_intake_rate_of_change(now, current_temp):
+    """Tính toán tốc độ biến thiên nhiệt độ nạp dT/dt (°C / phút)."""
+    if not _intake_history:
+        _intake_history.append((now, current_temp))
+        return 0.0
+    old_time, old_temp = _intake_history[0]
+    dt_sec = now - old_time
+    if dt_sec > 300.0:
+        _intake_history.clear()
+        _intake_history.append((now, current_temp))
+        return 0.0
+    _intake_history.append((now, current_temp))
+    if dt_sec >= 10.0:
+        return (current_temp - old_temp) / (dt_sec / 60.0)
+    return 0.0
+
+
 def collect_measurements(data, lines):
     """Ánh xạ những cảm biến hữu ích thành tập metric ổn định."""
     cpu = find_chip(data, "coretemp-")
@@ -203,42 +224,42 @@ def collect_measurements(data, lines):
             read_feature(apple, raw_sensor, ("_input",)),
         )
 
-# --- THUẬT TOÁN ĐO NHIỆT ĐỘ PHÒNG ĐỘNG HỌC (DYNAMIC AMBIENT ESTIMATION) ---
+    # --- THUẬT TOÁN ĐO NHIỆT ĐỘ PHÒNG ĐỘNG HỌC (DYNAMIC THERMAL GRADIENT AMBIENT) ---
     air_intake = read_feature(apple, "TA0V", ("_input",))
     fan_speed = read_feature(apple, "Main", ("_input",))
     cpu_pkg = read_feature(cpu, "Package id 0", ("_input",))
     gpu_temp = read_feature(gpu, "edge", ("_input",))
 
+    inlet_air = None
+    ambient = None
+
     if air_intake is not None and 0.0 < air_intake < 125.0:
-        # 1. Độ lệch cơ sở dựa trên lưu lượng gió quạt
-        if fan_speed is not None and fan_speed > 0:
-            if fan_speed >= 1800:
-                base_offset = 0.7   # Áp suất âm mạnh, gió lưu thông nhanh
-            elif fan_speed >= 1400:
-                base_offset = 1   # Mức trung bình
-            elif fan_speed >= 1200:
-                base_offset = 1.2   # Mức sàn vận hành êm (1300 RPM)
-            else:
-                base_offset = 1.4   # Quạt dưới sàn hoặc tắt
+        inlet_air = round(air_intake, 1)
+        now_ts = time.time()
+        dt_rate = calculate_intake_rate_of_change(now_ts, air_intake)
+
+        # 1. Biến thiên nhiệt động học (Dynamic Thermal Gradient: dT/dt)
+        # Quán tính nhiệt của cảm biến tau ~ 0.5 phút, phản ánh xu hướng môi trường
+        tau = 0.5
+        gradient_adj = max(-0.6, min(0.6, tau * dt_rate))
+
+        # 2. Bù trừ truyền nhiệt vỏ nhôm (Chassis thermal leakage - biên độ nhỏ: 0.2°C - 0.6°C)
+        if fan_speed and fan_speed >= 1800:
+            base_leakage = 0.2
+        elif fan_speed and fan_speed >= 1400:
+            base_leakage = 0.3
         else:
-            base_offset = 1.2
+            base_leakage = 0.4
 
-        # 2. Bù trừ nhiệt dẫn qua khung nhôm (Thermal Conduction Penalty)
-        leakage_penalty = 0.0
-        
-        # Bù trừ CPU: bắt đầu tính khi CPU > 48°C
-        if cpu_pkg is not None and cpu_pkg > 48.0:
-            leakage_penalty += (cpu_pkg - 48.0) * 0.02
-            
-        # Bù trừ GPU: nếu GPU nóng hơn mức bình thường (> 50°C)
-        if gpu_temp is not None and gpu_temp > 50.0:
-            leakage_penalty += (gpu_temp - 50.0) * 0.02
+        load_penalty = 0.0
+        if cpu_pkg and cpu_pkg > 55.0:
+            load_penalty += (cpu_pkg - 55.0) * 0.015
+        if gpu_temp and gpu_temp > 55.0:
+            load_penalty += (gpu_temp - 55.0) * 0.015
+        load_penalty = min(0.3, load_penalty)
 
-        # Đặt trần chặn trên (Clamping) để tránh offset quá đà làm tụt nhiệt ảo
-        clamped_penalty = min(leakage_penalty, 1.2)
-
-        total_offset = base_offset + clamped_penalty
-        ambient = round(air_intake - total_offset, 1)
+        chassis_offset = base_leakage + load_penalty
+        ambient = round(air_intake + gradient_adj - chassis_offset, 1)
     else:
         # Fallback an toàn nếu mất cảm biến TA0V
         candidates = []
@@ -251,10 +272,12 @@ def collect_measurements(data, lines):
                             candidates.append(val)
         if candidates:
             ambient = round(min(candidates) - 4.5, 1)
-        else:
-            ambient = None
+            inlet_air = ambient
 
+    if inlet_air is not None and 0.0 <= inlet_air < 100.0:
+        add_sample(lines, "thermal_inlet_air_temperature_celsius", inlet_air)
     if ambient is not None and 0.0 <= ambient < 100.0:
+        add_sample(lines, "thermal_room_temperature_celsius", ambient)
         add_sample(lines, "thermal_estimated_ambient_temperature_celsius", ambient)
 
 def write_atomic(lines, output_path=None):
@@ -305,7 +328,11 @@ def collect_once(output_path=None, config_path=None):
             [
                 "# HELP thermal_temperature_celsius Các giá trị nhiệt độ phần cứng đã chọn.",
                 "# TYPE thermal_temperature_celsius gauge",
-                "# HELP thermal_estimated_ambient_temperature_celsius Nhiệt độ môi trường phòng ước tính từ cảm biến iMac.",
+                "# HELP thermal_inlet_air_temperature_celsius Nhiệt độ khí nạp trực tiếp vào đáy iMac từ cảm biến TA0V.",
+                "# TYPE thermal_inlet_air_temperature_celsius gauge",
+                "# HELP thermal_room_temperature_celsius Nhiệt độ phòng ước tính qua mô hình nhiệt động học (Dynamic Thermal Gradient).",
+                "# TYPE thermal_room_temperature_celsius gauge",
+                "# HELP thermal_estimated_ambient_temperature_celsius Nhiệt độ phòng ước tính qua mô hình bù trừ nhiệt động học (Dynamic Thermal Gradient).",
                 "# TYPE thermal_estimated_ambient_temperature_celsius gauge",
                 "# HELP thermal_fan_speed_rpm Các giá trị tốc độ quạt đã chọn.",
                 "# TYPE thermal_fan_speed_rpm gauge",

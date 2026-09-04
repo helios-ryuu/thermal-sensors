@@ -45,22 +45,22 @@
   "graphTooltip": 1,
   "links": [
     {
-      "title": "T\u00e0i nguy\u00ean h\u1ec7 th\u1ed1ng",
+      "title": "System Resources",
+      "tooltip": "View system resources dashboard",
       "type": "dashboard",
-      "url": "/d/system-resources",
-      "tooltip": "Xem dashboard t\u00e0i nguy\u00ean h\u1ec7 th\u1ed1ng"
+      "url": "/d/system-resources"
     },
     {
-      "title": "S\u1ee9c kh\u1ecfe h\u1ec7 th\u1ed1ng",
+      "title": "System Health",
+      "tooltip": "View system health dashboard",
       "type": "dashboard",
-      "url": "/d/system-health",
-      "tooltip": "Xem dashboard s\u1ee9c kh\u1ecfe h\u1ec7 th\u1ed1ng"
+      "url": "/d/system-health"
     },
     {
-      "title": "M\u1ea1ng & B\u1ea3o m\u1eadt",
+      "title": "Network & Security",
+      "tooltip": "View network and security dashboard",
       "type": "dashboard",
-      "url": "/d/network-security",
-      "tooltip": "Xem dashboard m\u1ea1ng v\u00e0 b\u1ea3o m\u1eadt"
+      "url": "/d/network-security"
     }
   ],
   "panels": [
@@ -196,41 +196,82 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Approximate room temperature: dynamic thermal estimation from air intake (TA0V), fan speed, and CPU load compensation.",
+      "description": "Estimated room temperature (~Room) via dynamic thermal gradient & chassis conduction model, and raw inlet air temperature at the bottom chassis intake (Inlet Air TA0V).",
       "fieldConfig": {
         "defaults": {
           "decimals": 1,
+          "mappings": [],
+          "max": 40,
+          "min": 10,
+          "noValue": "N/A",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "blue",
                 "value": null
               },
               {
-                "color": "yellow",
-                "value": 30
+                "color": "green",
+                "value": 18
+              },
+              {
+                "color": "orange",
+                "value": 28
               },
               {
                 "color": "red",
-                "value": 35
+                "value": 33
               }
             ]
           },
           "unit": "celsius"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "~room"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "inlet air"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 6,
         "x": 6,
-        "y": 0
+        "y": 5
       },
       "id": 12,
       "options": {
         "colorMode": "value",
-        "graphMode": "area",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -238,17 +279,23 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "value_and_name"
       },
       "targets": [
         {
-          "expr": "thermal_estimated_ambient_temperature_celsius",
+          "expr": "thermal_room_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.4)",
           "instant": true,
           "legendFormat": "~room",
           "refId": "A"
+        },
+        {
+          "expr": "thermal_inlet_air_temperature_celsius or thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}",
+          "instant": true,
+          "legendFormat": "inlet air",
+          "refId": "B"
         }
       ],
-      "title": "~Room Temperature",
+      "title": "~Room & Inlet Air",
       "type": "stat"
     },
     {
@@ -363,7 +410,7 @@
       },
       "targets": [
         {
-          "expr": "avg(thermal_temperature_celsius{component!=\"cpu\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
+          "expr": "avg(thermal_temperature_celsius{component!=\"cpu\",sensor!=\"air_intake\"} or thermal_temperature_celsius{component=\"cpu\",sensor=\"package\"})",
           "format": "time_series",
           "instant": true,
           "legendFormat": "machine avg",
@@ -765,12 +812,11 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Estimated ambient room temperature derived dynamically from air intake sensor (TA0V), fan speed, and CPU thermal dissipation.",
+      "description": "Comparison chart: Raw air intake temperature at bottom chassis grille (Inlet Air TA0V) vs estimated room ambient temperature (~Room) using differential thermodynamic gradient.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "fixedColor": "light-blue",
-            "mode": "fixed"
+            "mode": "palette-classic"
           },
           "custom": {
             "drawStyle": "line",
@@ -801,7 +847,64 @@
           },
           "unit": "celsius"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "~room (estimated)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 15
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "inlet air (TA0V)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "light-blue",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1.5
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    6,
+                    4
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 5
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 7,
@@ -829,12 +932,17 @@
       },
       "targets": [
         {
-          "expr": "thermal_estimated_ambient_temperature_celsius",
-          "legendFormat": "~room",
+          "expr": "thermal_room_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.4)",
+          "legendFormat": "~room (estimated)",
           "refId": "A"
+        },
+        {
+          "expr": "thermal_inlet_air_temperature_celsius or thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}",
+          "legendFormat": "inlet air (TA0V)",
+          "refId": "B"
         }
       ],
-      "title": "~Room Temperature (Ambient)",
+      "title": "~Room & Inlet Air Temperature",
       "type": "timeseries"
     },
     {
@@ -1078,5 +1186,5 @@
   "timezone": "browser",
   "title": "C\u1ea3m bi\u1ebfn nhi\u1ec7t \u0111\u1ed9 iMac",
   "uid": "imac-thermal",
-  "version": 7
+  "version": 9
 }

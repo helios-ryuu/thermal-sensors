@@ -117,6 +117,9 @@ max_temp = 78
         )
         self.assertIn("thermal_mbpfan_config_valid 0", written_lines)
 
+    def setUp(self):
+        collect_sensors._intake_history.clear()
+
     def test_ambient_estimation_with_ta0v(self):
         sensor_json = {
             "coretemp-isa-0000": {
@@ -134,8 +137,10 @@ max_temp = 78
         self.assertIn('thermal_temperature_celsius{component="applesmc",sensor="air_intake"} 28.0', lines)
         self.assertIn('thermal_temperature_celsius{component="applesmc",sensor="cpu_proximity"} 42.0', lines)
         self.assertIn('thermal_temperature_celsius{component="applesmc",sensor="gpu_proximity"} 45.0', lines)
-        # Fan 2000 RPM (offset 0.7), CPU 45°C (no penalty) -> ambient = 28.0 - 0.7 = 27.3
-        self.assertIn("thermal_estimated_ambient_temperature_celsius 27.3", lines)
+        self.assertIn("thermal_inlet_air_temperature_celsius 28.0", lines)
+        # Fan 2000 RPM (offset 0.2), CPU 45°C (<=55, no penalty) -> ambient = 28.0 - 0.2 = 27.8
+        self.assertIn("thermal_room_temperature_celsius 27.8", lines)
+        self.assertIn("thermal_estimated_ambient_temperature_celsius 27.8", lines)
 
     def test_ambient_estimation_dynamic_low_fan_and_cpu_load(self):
         sensor_json = {
@@ -149,8 +154,41 @@ max_temp = 78
         }
         lines = []
         collect_sensors.collect_measurements(sensor_json, lines)
-        # Fan 1300 RPM (offset 1.2), CPU 60°C (penalty: (60-48)*0.02 = 0.24) -> total offset 1.44 -> ambient = 28.0 - 1.44 = 26.6
-        self.assertIn("thermal_estimated_ambient_temperature_celsius 26.6", lines)
+        self.assertIn("thermal_inlet_air_temperature_celsius 28.0", lines)
+        # Fan 1300 RPM (offset 0.4), CPU 60°C (penalty (60-55)*0.015 = 0.075) -> total offset ~0.48 -> ambient = 28.0 - 0.48 = 27.5
+        self.assertIn("thermal_room_temperature_celsius 27.5", lines)
+        self.assertIn("thermal_estimated_ambient_temperature_celsius 27.5", lines)
+
+    def test_ambient_estimation_cool_intake(self):
+        sensor_json = {
+            "coretemp-isa-0000": {
+                "Package id 0": {"temp1_input": 42.0},
+            },
+            "applesmc-isa-0300": {
+                "Main": {"fan1_input": 1300.0},
+                "TA0V": {"temp1_input": 20.8},
+            },
+        }
+        lines = []
+        collect_sensors.collect_measurements(sensor_json, lines)
+        self.assertIn("thermal_inlet_air_temperature_celsius 20.8", lines)
+        # Cool intake (20.8°C), Fan 1300 RPM (offset 0.4) -> room ambient = 20.8 - 0.4 = 20.4
+        self.assertIn("thermal_room_temperature_celsius 20.4", lines)
+        self.assertIn("thermal_estimated_ambient_temperature_celsius 20.4", lines)
+
+    def test_intake_rate_of_change_gradient(self):
+        t0 = 1000.0
+        # First sample
+        r0 = collect_sensors.calculate_intake_rate_of_change(t0, 24.0)
+        self.assertEqual(r0, 0.0)
+        # 60 seconds later, temp drops 1.2°C (rate = -1.2 °C/min)
+        t1 = t0 + 60.0
+        r1 = collect_sensors.calculate_intake_rate_of_change(t1, 22.8)
+        self.assertAlmostEqual(r1, -1.2, places=2)
+        # Staleness check: > 300s
+        t2 = t1 + 350.0
+        r2 = collect_sensors.calculate_intake_rate_of_change(t2, 22.0)
+        self.assertEqual(r2, 0.0)
 
     def test_ambient_estimation_fallback_without_ta0v(self):
         sensor_json = {

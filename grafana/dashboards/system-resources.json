@@ -3,17 +3,17 @@
   "graphTooltip": 1,
   "links": [
     {
-      "title": "Cảm biến nhiệt độ iMac",
+      "title": "iMac Thermal Sensors",
       "type": "dashboard",
       "url": "/d/imac-thermal"
     },
     {
-      "title": "Sức khỏe hệ thống",
+      "title": "System Health",
       "type": "dashboard",
       "url": "/d/system-health"
     },
     {
-      "title": "Mạng & Bảo mật",
+      "title": "Network & Security",
       "type": "dashboard",
       "url": "/d/network-security"
     }
@@ -450,6 +450,6 @@
   "timezone": "browser",
   "title": "Tài nguyên hệ thống",
   "uid": "system-resources",
-  "version": 1
+  "version": 2
 }
 

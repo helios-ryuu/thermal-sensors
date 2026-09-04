@@ -3,17 +3,17 @@
   "graphTooltip": 1,
   "links": [
     {
-      "title": "C\u1ea3m bi\u1ebfn nhi\u1ec7t \u0111\u1ed9 iMac",
+      "title": "iMac Thermal Sensors",
       "type": "dashboard",
       "url": "/d/imac-thermal"
     },
     {
-      "title": "T\u00e0i nguy\u00ean h\u1ec7 th\u1ed1ng",
+      "title": "System Resources",
       "type": "dashboard",
       "url": "/d/system-resources"
     },
     {
-      "title": "S\u1ee9c kh\u1ecfe h\u1ec7 th\u1ed1ng",
+      "title": "System Health",
       "type": "dashboard",
       "url": "/d/system-health"
     }
@@ -2403,5 +2403,5 @@
   "timezone": "browser",
   "title": "M\u1ea1ng & B\u1ea3o m\u1eadt",
   "uid": "network-security",
-  "version": 4
+  "version": 5
 }
