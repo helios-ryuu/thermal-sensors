@@ -39,6 +39,7 @@ slow_cache = {
     "double_nat": 0,
     "hairpinning": 0,
     "public_ipv4": "unknown",
+    "public_ipv6": "none",
     "isp": "unknown",
     "ping_gateway": None,
     "ping_dns": None,
@@ -162,6 +163,25 @@ def get_dns_servers():
     return servers
 
 
+def _classify_interface_type(name: str) -> str:
+    """Phân loại kiểu giao diện mạng dựa trên tên."""
+    if name.startswith(("eth", "enp", "eno", "ens", "enx", "em")):
+        return "physical"
+    if name.startswith(("wlan", "wlp", "wlx", "wifi")):
+        return "wifi"
+    if name.startswith(("docker", "br-")):
+        return "docker"
+    if name.startswith(("tailscale", "ts")):
+        return "vpn"
+    if name.startswith(("tun", "tap", "wg")):
+        return "vpn"
+    if name.startswith("flannel"):
+        return "k8s"
+    if name.startswith(("veth", "virbr")):
+        return "virtual"
+    return "other"
+
+
 def get_network_interfaces():
     """Lấy danh sách interfaces, IP, MTU từ `ip -j addr`."""
     interfaces = []
@@ -189,6 +209,7 @@ def get_network_interfaces():
                     "state": operstate,
                     "mtu": mtu,
                     "ips": ip_list,
+                    "net_type": _classify_interface_type(ifname),
                 })
     except Exception:
         pass
@@ -348,23 +369,44 @@ def ping_target(target):
 
 
 def get_public_ip_and_isp():
-    """Lấy thông tin IP Public và ISP (fallback nhẹ nhàng)."""
-    public_ip = "unknown"
+    """Lấy thông tin IP Public (cả IPv4 và IPv6) và ISP."""
+    public_ipv4 = "unknown"
+    public_ipv6 = "none"
     isp = "unknown"
     try:
+        # Lấy IP Public qua ifconfig.co (IPv4 ưu tiên)
         out = subprocess.run(
-            ["curl", "-s", "--max-time", "3", "https://ifconfig.co/json"],
+            ["curl", "-4", "-s", "--max-time", "3", "https://ifconfig.co/json"],
             capture_output=True,
             text=True,
             timeout=4,
         )
         if out.returncode == 0 and out.stdout.strip():
             d = json.loads(out.stdout)
-            public_ip = d.get("ip", "unknown")
+            public_ipv4 = d.get("ip", "unknown")
             isp = d.get("asn_org", d.get("isp", "unknown"))
     except Exception:
         pass
-    return public_ip, isp
+    try:
+        # Thử lấy địa chỉ IPv6 public qua ifconfig.co (force IPv6)
+        out6 = subprocess.run(
+            ["curl", "-6", "-s", "--max-time", "3", "https://ifconfig.co/json"],
+            capture_output=True,
+            text=True,
+            timeout=4,
+        )
+        if out6.returncode == 0 and out6.stdout.strip():
+            d6 = json.loads(out6.stdout)
+            ipv6_candidate = d6.get("ip", "")
+            try:
+                addr = ipaddress.ip_address(ipv6_candidate)
+                if addr.version == 6 and not addr.is_private and not addr.is_loopback:
+                    public_ipv6 = ipv6_candidate
+            except ValueError:
+                pass
+    except Exception:
+        pass
+    return public_ipv4, public_ipv6, isp
 
 
 def get_open_listening_ports():
@@ -580,9 +622,10 @@ def collect_network_metrics(lines):
         d_nat, cgnat_hop = detect_double_nat_and_cgnat(gateway_ip)
         slow_cache["double_nat"] = d_nat
 
-        # Lấy public IP
-        pub_ip, isp_name = get_public_ip_and_isp()
+        # Lấy public IP (cả IPv4 và IPv6)
+        pub_ip, pub_ipv6, isp_name = get_public_ip_and_isp()
         slow_cache["public_ipv4"] = pub_ip
+        slow_cache["public_ipv6"] = pub_ipv6
         slow_cache["isp"] = isp_name
 
         # Đánh giá CGNAT: nếu WAN IP hoặc hop 2 nằm trong 100.64.0.0/10
@@ -607,7 +650,11 @@ def collect_network_metrics(lines):
         lines,
         "net_wan_info",
         1,
-        {"public_ipv4": slow_cache["public_ipv4"], "isp": slow_cache["isp"]},
+        {
+            "public_ipv4": slow_cache["public_ipv4"],
+            "public_ipv6": slow_cache["public_ipv6"],
+            "isp": slow_cache["isp"],
+        },
     )
 
     # 3. Xuất Gateway & DNS
@@ -648,6 +695,7 @@ def collect_network_metrics(lines):
                 "state": iface["state"],
                 "mtu": str(iface["mtu"]),
                 "ips": ip_summary,
+                "net_type": iface.get("net_type", "other"),
             },
         )
 
