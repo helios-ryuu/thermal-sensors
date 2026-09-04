@@ -262,9 +262,9 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 4,
         "x": 6,
-        "y": 5
+        "y": 0
       },
       "id": 12,
       "options": {
@@ -283,13 +283,13 @@
       },
       "targets": [
         {
-          "expr": "thermal_room_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.4)",
+          "expr": "thermal_room_temperature_celsius or thermal_estimated_ambient_temperature_celsius",
           "instant": true,
           "legendFormat": "~room",
           "refId": "A"
         },
         {
-          "expr": "thermal_inlet_air_temperature_celsius or thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}",
+          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}",
           "instant": true,
           "legendFormat": "inlet air",
           "refId": "B"
@@ -743,6 +743,8 @@
             "mode": "fixed"
           },
           "custom": {
+            "axisSoftMax": 60,
+            "axisSoftMin": 40,
             "drawStyle": "line",
             "fillOpacity": 15,
             "gradientMode": "opacity",
@@ -819,6 +821,8 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisSoftMax": 30,
+            "axisSoftMin": 18,
             "drawStyle": "line",
             "fillOpacity": 15,
             "gradientMode": "opacity",
@@ -932,12 +936,12 @@
       },
       "targets": [
         {
-          "expr": "thermal_room_temperature_celsius or (thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"} - 0.4)",
+          "expr": "thermal_room_temperature_celsius or thermal_estimated_ambient_temperature_celsius",
           "legendFormat": "~room (estimated)",
           "refId": "A"
         },
         {
-          "expr": "thermal_inlet_air_temperature_celsius or thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}",
+          "expr": "thermal_temperature_celsius{component=\"applesmc\",sensor=\"air_intake\"}",
           "legendFormat": "inlet air (TA0V)",
           "refId": "B"
         }
@@ -1186,5 +1190,5 @@
   "timezone": "browser",
   "title": "C\u1ea3m bi\u1ebfn nhi\u1ec7t \u0111\u1ed9 iMac",
   "uid": "imac-thermal",
-  "version": 9
+  "version": 10
 }
