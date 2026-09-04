@@ -182,8 +182,91 @@ def _classify_interface_type(name: str) -> str:
     return "other"
 
 
+MAC_OUI_MAP = {
+    "04:5F:A6": "ZTE / ISP Gateway",
+    "10:51:07": "Apple Inc.",
+    "E4:0D:36": "Apple Inc.",
+    "00:17:F2": "Apple Inc.", "00:1E:52": "Apple Inc.", "00:25:4B": "Apple Inc.",
+    "00:26:BB": "Apple Inc.", "04:0C:CE": "Apple Inc.", "14:7D:DA": "Apple Inc.",
+    "18:AF:61": "Apple Inc.", "28:CF:DA": "Apple Inc.", "34:36:3B": "Apple Inc.",
+    "38:C9:86": "Apple Inc.", "40:6C:8F": "Apple Inc.", "48:D7:05": "Apple Inc.",
+    "50:BC:96": "Apple Inc.", "54:26:96": "Apple Inc.", "5C:E9:1E": "Apple Inc.",
+    "68:5B:35": "Apple Inc.", "70:56:81": "Apple Inc.", "74:E1:B6": "Apple Inc.",
+    "78:4F:43": "Apple Inc.", "7C:D1:C3": "Apple Inc.", "80:49:71": "Apple Inc.",
+    "84:38:35": "Apple Inc.", "88:66:5A": "Apple Inc.", "8C:85:90": "Apple Inc.",
+    "90:B9:31": "Apple Inc.", "94:94:26": "Apple Inc.", "98:01:A7": "Apple Inc.",
+    "9C:20:7B": "Apple Inc.", "A4:83:E7": "Apple Inc.", "AC:BC:32": "Apple Inc.",
+    "B0:34:95": "Apple Inc.", "B4:18:D1": "Apple Inc.", "B8:09:8A": "Apple Inc.",
+    "BC:52:B7": "Apple Inc.", "C0:84:7A": "Apple Inc.", "C8:6F:1D": "Apple Inc.",
+    "DC:A9:04": "Apple Inc.", "F4:37:B7": "Apple Inc.", "F8:27:93": "Apple Inc.",
+    "14:49:E0": "Samsung", "18:22:7E": "Samsung", "24:4B:03": "Samsung",
+    "2C:AE:2B": "Samsung", "40:16:3B": "Samsung", "50:CC:F8": "Samsung",
+    "70:2C:1F": "Samsung", "84:25:DB": "Samsung", "8C:77:12": "Samsung",
+    "00:02:B3": "Intel Corp", "00:13:02": "Intel Corp", "00:15:00": "Intel Corp",
+    "24:77:03": "Intel Corp", "34:13:E8": "Intel Corp", "48:51:B7": "Intel Corp",
+    "18:FE:34": "Espressif IoT", "24:0A:C4": "Espressif IoT", "24:62:AB": "Espressif IoT",
+    "30:AE:A4": "Espressif IoT", "84:0D:8E": "Espressif IoT", "A4:CF:12": "Espressif IoT",
+    "00:0A:EB": "TP-Link", "14:CC:20": "TP-Link", "50:C7:BF": "TP-Link", "70:4F:57": "TP-Link",
+    "00:9E:C8": "Xiaomi", "04:CF:8C": "Xiaomi", "14:F6:5A": "Xiaomi", "74:51:BA": "Xiaomi",
+    "B8:27:EB": "Raspberry Pi", "DC:A6:32": "Raspberry Pi", "E4:5F:01": "Raspberry Pi",
+    "52:54:00": "QEMU/KVM Virtual", "00:0C:29": "VMware", "00:50:56": "VMware",
+}
+
+
+def identify_mac_vendor(mac: str) -> str:
+    """Xác định nhà sản xuất phần cứng từ tiền tố MAC OUI hoặc Private Wi-Fi MAC."""
+    if not mac or mac == "00:00:00:00:00:00":
+        return "Unknown"
+    try:
+        first_byte = int(mac.split(":")[0], 16)
+        if first_byte & 2:
+            return "Private Wi-Fi (Apple/Android)"
+    except Exception:
+        pass
+    prefix = mac[:8].upper()
+    return MAC_OUI_MAP.get(prefix, "Standard LAN Device")
+
+
+_dns_cache = {}
+
+
+def resolve_device_name(ip: str, gateway_ip: str = None, vendor: str = None) -> str:
+    """Phân giải tên hostname thân thiện cho thiết bị."""
+    if not ip:
+        return "unknown"
+    if gateway_ip and ip == gateway_ip:
+        return "Default Gateway (Router)"
+    if ip in _dns_cache:
+        return _dns_cache[ip]
+
+    hostname = ""
+    try:
+        hostname = socket.getnameinfo((ip, 0), socket.NI_NAMEREQD)[0]
+    except Exception:
+        pass
+
+    if hostname:
+        _dns_cache[ip] = hostname
+        return hostname
+
+    # Tên thân thiện nếu chưa phân giải được DNS
+    last_octet = ip.split(".")[-1] if "." in ip else ip.replace(":", "")[-4:]
+    if vendor and "Apple" in vendor:
+        label = f"Apple-Device-{last_octet}"
+    elif vendor and "Private" in vendor:
+        label = f"Mobile-{last_octet}"
+    elif vendor and "IoT" in vendor:
+        label = f"IoT-{last_octet}"
+    else:
+        clean_ip = ip.replace(":", "-").replace(".", "-")
+        label = f"lan-{clean_ip}"
+
+    _dns_cache[ip] = label
+    return label
+
+
 def get_network_interfaces():
-    """Lấy danh sách interfaces, IP, MTU từ `ip -j addr`."""
+    """Lấy danh sách interfaces, IP, MTU, Speed, Duplex, MAC từ `ip -j addr` và /sys."""
     interfaces = []
     try:
         out = subprocess.run(
@@ -202,14 +285,45 @@ def get_network_interfaces():
                 mtu = item.get("mtu", 1500)
                 ip_list = []
                 for a in item.get("addr_info", []):
-                    if a.get("family") == "inet":
-                        ip_list.append(f"{a.get('local')}/{a.get('prefixlen')}")
+                    ip_list.append(f"{a.get('local')}/{a.get('prefixlen')}")
+
+                # Đọc thông số phần cứng từ /sys/class/net/<ifname>
+                speed_str = "N/A"
+                duplex_str = "N/A"
+                mac_str = "N/A"
+                sys_base = f"/sys/class/net/{ifname}"
+                if os.path.exists(sys_base):
+                    try:
+                        with open(f"{sys_base}/address", "r", encoding="utf-8") as f:
+                            m = f.read().strip()
+                            if m and m != "00:00:00:00:00:00":
+                                mac_str = m
+                    except Exception:
+                        pass
+                    try:
+                        with open(f"{sys_base}/speed", "r", encoding="utf-8") as f:
+                            s = f.read().strip()
+                            if s and s != "-1" and int(s) > 0:
+                                speed_str = f"{s} Mbps"
+                    except Exception:
+                        pass
+                    try:
+                        with open(f"{sys_base}/duplex", "r", encoding="utf-8") as f:
+                            d = f.read().strip()
+                            if d and d != "unknown":
+                                duplex_str = d
+                    except Exception:
+                        pass
+
                 interfaces.append({
                     "name": ifname,
                     "state": operstate,
                     "mtu": mtu,
                     "ips": ip_list,
                     "net_type": _classify_interface_type(ifname),
+                    "speed": speed_str,
+                    "duplex": duplex_str,
+                    "mac": mac_str,
                 })
     except Exception:
         pass
@@ -369,43 +483,105 @@ def ping_target(target):
 
 
 def get_public_ip_and_isp():
-    """Lấy thông tin IP Public (cả IPv4 và IPv6) và ISP."""
-    public_ipv4 = "unknown"
-    public_ipv6 = "none"
+    """Lấy thông tin IP Public (cả IPv4 và IPv6 riêng biệt) và ISP."""
+    public_ipv4 = "None"
+    public_ipv6 = "None"
     isp = "unknown"
-    try:
-        # Lấy IP Public qua ifconfig.co (IPv4 ưu tiên)
-        out = subprocess.run(
-            ["curl", "-4", "-s", "--max-time", "3", "https://ifconfig.co/json"],
-            capture_output=True,
-            text=True,
-            timeout=4,
-        )
-        if out.returncode == 0 and out.stdout.strip():
-            d = json.loads(out.stdout)
-            public_ipv4 = d.get("ip", "unknown")
-            isp = d.get("asn_org", d.get("isp", "unknown"))
-    except Exception:
-        pass
-    try:
-        # Thử lấy địa chỉ IPv6 public qua ifconfig.co (force IPv6)
-        out6 = subprocess.run(
-            ["curl", "-6", "-s", "--max-time", "3", "https://ifconfig.co/json"],
-            capture_output=True,
-            text=True,
-            timeout=4,
-        )
-        if out6.returncode == 0 and out6.stdout.strip():
-            d6 = json.loads(out6.stdout)
-            ipv6_candidate = d6.get("ip", "")
-            try:
-                addr = ipaddress.ip_address(ipv6_candidate)
-                if addr.version == 6 and not addr.is_private and not addr.is_loopback:
-                    public_ipv6 = ipv6_candidate
-            except ValueError:
-                pass
-    except Exception:
-        pass
+
+    # 1. Thử lấy IPv4 thật (chỉ chấp nhận địa chỉ version 4)
+    ipv4_endpoints = [
+        ["curl", "-4", "-s", "--max-time", "3", "https://api.ipify.org?format=json"],
+        ["curl", "-4", "-s", "--max-time", "3", "https://ifconfig.co/json"],
+        ["curl", "-4", "-s", "--max-time", "2", "https://ipv4.icanhazip.com"],
+        ["curl", "-4", "-s", "--max-time", "2", "https://v4.ident.me"],
+    ]
+    for cmd in ipv4_endpoints:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
+            if out.returncode == 0 and out.stdout.strip():
+                raw = out.stdout.strip()
+                cand = ""
+                if raw.startswith("{"):
+                    try:
+                        d = json.loads(raw)
+                        cand = d.get("ip", "")
+                        if isp == "unknown":
+                            isp = d.get("asn_org", d.get("isp", "unknown"))
+                    except Exception:
+                        pass
+                else:
+                    cand = raw
+                if cand:
+                    try:
+                        addr = ipaddress.ip_address(cand.strip())
+                        if addr.version == 4:
+                            public_ipv4 = str(addr)
+                            break
+                    except ValueError:
+                        pass
+        except Exception:
+            pass
+
+    # 2. Thử lấy IPv6 thật (chỉ chấp nhận địa chỉ version 6 public toàn cầu)
+    ipv6_endpoints = [
+        ["curl", "-6", "-s", "--max-time", "3", "https://api6.ipify.org?format=json"],
+        ["curl", "-6", "-s", "--max-time", "3", "https://ifconfig.co/json"],
+        ["curl", "-6", "-s", "--max-time", "2", "https://ipv6.icanhazip.com"],
+        ["curl", "-6", "-s", "--max-time", "2", "https://v6.ident.me"],
+    ]
+    for cmd in ipv6_endpoints:
+        try:
+            out6 = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
+            if out6.returncode == 0 and out6.stdout.strip():
+                raw6 = out6.stdout.strip()
+                cand6 = ""
+                if raw6.startswith("{"):
+                    try:
+                        d6 = json.loads(raw6)
+                        cand6 = d6.get("ip", "")
+                        if isp == "unknown":
+                            isp = d6.get("asn_org", d6.get("isp", "unknown"))
+                    except Exception:
+                        pass
+                else:
+                    cand6 = raw6
+                if cand6:
+                    try:
+                        addr6 = ipaddress.ip_address(cand6.strip())
+                        if addr6.version == 6 and not addr6.is_private and not addr6.is_link_local and not addr6.is_loopback:
+                            public_ipv6 = str(addr6)
+                            break
+                    except ValueError:
+                        pass
+        except Exception:
+            pass
+
+    # 3. Fallback đọc IPv6 global unicast (2000::/3) từ card mạng nếu curl -6 timeout
+    if public_ipv6 == "None":
+        try:
+            out_ip = subprocess.run(
+                ["ip", "-j", "-6", "addr", "show", "scope", "global"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if out_ip.returncode == 0 and out_ip.stdout.strip():
+                data = json.loads(out_ip.stdout)
+                for iface in data:
+                    for a in iface.get("addr_info", []):
+                        cand = a.get("local", "")
+                        try:
+                            addr = ipaddress.ip_address(cand)
+                            if addr.version == 6 and not addr.is_private and not addr.is_link_local:
+                                public_ipv6 = str(addr)
+                                break
+                        except ValueError:
+                            pass
+                    if public_ipv6 != "None":
+                        break
+        except Exception:
+            pass
+
     return public_ipv4, public_ipv6, isp
 
 
@@ -696,6 +872,9 @@ def collect_network_metrics(lines):
                 "mtu": str(iface["mtu"]),
                 "ips": ip_summary,
                 "net_type": iface.get("net_type", "other"),
+                "speed": iface.get("speed", "N/A"),
+                "duplex": iface.get("duplex", "N/A"),
+                "mac": iface.get("mac", "N/A"),
             },
         )
 
@@ -703,15 +882,18 @@ def collect_network_metrics(lines):
     # Thiết bị LAN
     for a in arp_entries:
         status = "reachable" if a["reachable"] else "stale"
+        vendor = identify_mac_vendor(a["mac"])
+        dev_name = resolve_device_name(a["ip"], gateway_ip=gateway_ip, vendor=vendor)
         add_sample(
             lines,
             "net_device_info",
             1,
             {
                 "network": "LAN",
-                "name": f"lan-{a['ip'].replace('.', '-')}",
+                "name": dev_name,
                 "ip": a["ip"],
                 "identifier": a["mac"],
+                "vendor": vendor,
                 "status": status,
                 "link_type": "direct",
             },
@@ -738,6 +920,7 @@ def collect_network_metrics(lines):
             ip = p.get("TailscaleIPs", [""])[0]
             status = "online" if p.get("Online") else "offline"
             link = "direct" if p.get("CurAddr") else f"relay-{p.get('Relay', 'derp')}"
+            os_name = p.get("OS", "node").capitalize()
             add_sample(
                 lines,
                 "net_device_info",
@@ -747,6 +930,7 @@ def collect_network_metrics(lines):
                     "name": name,
                     "ip": ip,
                     "identifier": p.get("OS", "node"),
+                    "vendor": f"Tailscale ({os_name})",
                     "status": status,
                     "link_type": link,
                 },

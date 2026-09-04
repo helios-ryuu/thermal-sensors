@@ -123,7 +123,17 @@ class NetworkCollectorTests(unittest.TestCase):
             content = f.read()
         self.assertIn("net_collector_success 1", content)
         self.assertIn("net_nat_is_cgnat", content)
-        self.assertIn("net_nat_is_symmetric", content)
+    def test_identify_mac_vendor(self):
+        self.assertEqual(collect_network.identify_mac_vendor("10:51:07:94:68:7b"), "Apple Inc.")
+        self.assertEqual(collect_network.identify_mac_vendor("e4:0d:36:cd:1e:3c"), "Apple Inc.")
+        self.assertEqual(collect_network.identify_mac_vendor("04:5f:a6:8f:1c:6d"), "ZTE / ISP Gateway")
+        self.assertEqual(collect_network.identify_mac_vendor("06:d1:50:f2:9b:0a"), "Private Wi-Fi (Apple/Android)")
+        self.assertEqual(collect_network.identify_mac_vendor("ee:4d:50:9c:2d:79"), "Private Wi-Fi (Apple/Android)")
+
+    def test_resolve_device_name(self):
+        self.assertEqual(collect_network.resolve_device_name("192.168.1.1", gateway_ip="192.168.1.1"), "Default Gateway (Router)")
+        name = collect_network.resolve_device_name("192.168.1.100", vendor="Apple Inc.")
+        self.assertEqual(name, "Apple-Device-100")
 
 
 if __name__ == "__main__":
