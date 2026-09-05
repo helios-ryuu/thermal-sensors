@@ -577,7 +577,7 @@
       },
       "targets": [
         {
-          "expr": "net_ping_latency_ms{target!=\"internet\"}",
+          "expr": "net_ping_latency_ms{service!=\"\", target!=\"internet\"}",
           "instant": true,
           "legendFormat": "{{service}}",
           "refId": "A"
@@ -681,7 +681,7 @@
       },
       "targets": [
         {
-          "expr": "net_ping_latency_ms{target!=\"internet\"}",
+          "expr": "net_ping_latency_ms{service!=\"\", target!=\"internet\"}",
           "legendFormat": "{{service}}",
           "refId": "A"
         }
