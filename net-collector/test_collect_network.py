@@ -193,6 +193,44 @@ tcp LISTEN 0 128 [::]:3000 [::]:* users:(("grafana",pid=1500,fd=7))
         self.assertEqual(p_3000["service"], "grafana")
         self.assertEqual(p_3000["exposure"], "Public / LAN")
 
+    def test_detect_double_nat_and_cgnat_hop_index_and_drop(self):
+        # Case 1: Hop 1 và Hop 2 đều là private RFC1918 -> Double NAT
+        with mock.patch.object(collect_network, "run_traceroute_hops", return_value={1: "192.168.2.1", 2: "192.168.1.1"}):
+            d_nat, cgnat = collect_network.detect_double_nat_and_cgnat("192.168.2.1")
+            self.assertEqual(d_nat, 1)
+            self.assertEqual(cgnat, 0)
+
+        # Case 2: Hop 2 bị router ZTE/Huawei drop (*), nhưng Hop 1 và Hop 3 đều là private -> Double NAT
+        with mock.patch.object(collect_network, "run_traceroute_hops", return_value={1: "192.168.2.1", 2: "*", 3: "192.168.1.1"}):
+            d_nat, cgnat = collect_network.detect_double_nat_and_cgnat("192.168.2.1")
+            self.assertEqual(d_nat, 1)
+            self.assertEqual(cgnat, 0)
+
+        # Case 3: Hop 2 bị drop (*), nhưng Hop 3 là CGNAT 100.64.x.x -> CGNAT
+        with mock.patch.object(collect_network, "run_traceroute_hops", return_value={1: "192.168.2.1", 2: "*", 3: "100.64.10.1"}):
+            d_nat, cgnat = collect_network.detect_double_nat_and_cgnat("192.168.2.1")
+            self.assertEqual(d_nat, 0)
+            self.assertEqual(cgnat, 1)
+
+        # Case 4: Public IP nằm trong dải CGNAT (100.64.0.0/10)
+        with mock.patch.object(collect_network, "run_traceroute_hops", return_value={1: "192.168.2.1", 2: "*", 3: "*"}):
+            d_nat, cgnat = collect_network.detect_double_nat_and_cgnat("192.168.2.1", public_ip="100.100.50.1")
+            self.assertEqual(cgnat, 1)
+
+    def test_fingerprint_all_devices_async(self):
+        mock_devices = [
+            {"ip": "192.168.1.1", "mac": "00:11:22:33:44:55", "reachable": True},
+            {"ip": "192.168.1.20", "mac": "aa:bb:cc:dd:ee:ff", "reachable": True},
+        ]
+        # Xóa cache trước khi test
+        collect_network._device_fingerprint_cache.clear()
+        
+        with mock.patch.object(collect_network, "_probe_ip_ports", return_value=[80]):
+            res = collect_network.fingerprint_all_devices(mock_devices, gateway_ip="192.168.1.1")
+            self.assertIn("192.168.1.1", res)
+            self.assertIn("192.168.1.20", res)
+            self.assertEqual(res["192.168.1.1"]["device_type"], "Router / Gateway")
+
 
 if __name__ == "__main__":
     unittest.main()

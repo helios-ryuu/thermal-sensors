@@ -461,9 +461,10 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Real-time ICMP ping latency dials to Gateway, DNS, and Internet (1.1.1.1). Green = Fast, Yellow = Moderate, Red = Slow.",
+      "description": "Real-time ICMP ping latency dials to Gateway, Local DNS, VN DNS, and Global Services (Cloudflare, Google, YouTube, Facebook, Discord, AWS, GitHub).",
       "fieldConfig": {
         "defaults": {
+          "max": 200,
           "min": 0,
           "unit": "ms",
           "thresholds": {
@@ -475,15 +476,15 @@
               },
               {
                 "color": "yellow",
-                "value": 20
+                "value": 80
               },
               {
                 "color": "orange",
-                "value": 60
+                "value": 130
               },
               {
                 "color": "red",
-                "value": 100
+                "value": 200
               }
             ]
           }
@@ -552,42 +553,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Internet"
-            },
-            "properties": [
-              {
-                "id": "max",
-                "value": 150
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "yellow",
-                      "value": 40
-                    },
-                    {
-                      "color": "orange",
-                      "value": 80
-                    },
-                    {
-                      "color": "red",
-                      "value": 120
-                    }
-                  ]
-                }
-              }
-            ]
           }
         ]
       },
@@ -626,7 +591,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "ICMP Ping latency history to Gateway, DNS Resolver, and Internet (1.1.1.1).",
+      "description": "ICMP Ping latency history to Gateway, Local DNS, VN DNS, and Global Services.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -646,11 +611,11 @@
               },
               {
                 "color": "yellow",
-                "value": 50
+                "value": 80
               },
               {
                 "color": "orange",
-                "value": 100
+                "value": 130
               },
               {
                 "color": "red",
@@ -663,7 +628,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "gateway"
+              "options": "Gateway"
             },
             "properties": [
               {
@@ -678,28 +643,13 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "dns"
+              "options": "DNS"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "fixedColor": "blue",
-                  "mode": "fixed"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "internet"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "fixedColor": "orange",
                   "mode": "fixed"
                 }
               }
