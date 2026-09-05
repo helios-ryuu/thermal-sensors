@@ -93,6 +93,7 @@ services:
       - "8081"
     environment:
       ENABLE_METRICS: "false"
+      AUTH_TOKEN: ${GRAFANA_RENDERER_TOKEN:-thermal-renderer-secret-token-1511}
     networks:
       - monitoring
     restart: unless-stopped
@@ -109,6 +110,7 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_RENDERING_SERVER_URL: http://renderer:8081/render
       GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_RENDERING_RENDERER_TOKEN: ${GRAFANA_RENDERER_TOKEN:-thermal-renderer-secret-token-1511}
       GF_AUTH_LOGIN_MAXIMUM_INACTIVE_LIFETIME_DURATION: 7d
       GF_AUTH_LOGIN_MAXIMUM_LIFETIME_DURATION: 7d
       GF_SECURITY_LOGIN_REMEMBER_DAYS: 7
