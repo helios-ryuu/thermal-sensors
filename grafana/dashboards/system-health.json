@@ -474,7 +474,7 @@
       },
       "targets": [
         {
-          "expr": "100 - (node_filesystem_files_free{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} / node_filesystem_files{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} * 100)",
+          "expr": "(100 - (node_filesystem_files_free{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} / (node_filesystem_files{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} > 0) * 100)) or (node_filesystem_files{fstype!~\"tmpfs|overlay|squashfs|sysfs|proc|devtmpfs\"} == 0) * 0",
           "instant": true,
           "legendFormat": "{{mountpoint}}",
           "refId": "A"
@@ -660,26 +660,54 @@
       "title": "Filesystem Table",
       "transformations": [
         {
-          "id": "merge",
-          "options": {}
+          "id": "joinByField",
+          "options": {
+            "byField": "mountpoint",
+            "mode": "outer"
+          }
         },
         {
           "id": "organize",
           "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "__name__": true,
+              "__name__ 1": true,
+              "__name__ 2": true,
+              "__name__ 3": true,
+              "device": true,
+              "device 1": true,
+              "device 2": true,
+              "device 3": true,
+              "fstype": true,
+              "fstype 1": true,
+              "fstype 2": true,
+              "fstype 3": true,
+              "instance": true,
+              "instance 1": true,
+              "instance 2": true,
+              "instance 3": true,
+              "job": true,
+              "job 1": true,
+              "job 2": true,
+              "job 3": true
+            },
+            "indexByName": {
+              "Mountpoint": 0,
+              "Size": 1,
+              "Used": 2,
+              "Avail": 3,
+              "Use%": 4
+            },
             "renameByName": {
-              "mountpoint": "Mountpoint",
               "Value #A": "Size",
               "Value #B": "Used",
               "Value #C": "Avail",
-              "Value #D": "Use%"
-            },
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "device": true,
-              "fstype": true,
-              "instance": true,
-              "job": true
+              "Value #D": "Use%",
+              "mountpoint": "Mountpoint"
             }
           }
         }

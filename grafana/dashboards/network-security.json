@@ -612,25 +612,13 @@
       },
       "targets": [
         {
-          "expr": "net_ping_latency_ms{target=\"gateway\"}",
+          "expr": "net_ping_latency_ms{target!=\"internet\"}",
           "instant": true,
-          "legendFormat": "Gateway",
+          "legendFormat": "{{service}}",
           "refId": "A"
-        },
-        {
-          "expr": "net_ping_latency_ms{target=\"dns\"}",
-          "instant": true,
-          "legendFormat": "DNS",
-          "refId": "B"
-        },
-        {
-          "expr": "net_ping_latency_ms{target=\"internet\"}",
-          "instant": true,
-          "legendFormat": "Internet",
-          "refId": "C"
         }
       ],
-      "title": "Latency Dials (Gateway / DNS / WAN)",
+      "title": "Latency Dials (Gateway / DNS / WAN / Services)",
       "type": "gauge"
     },
     {
@@ -743,8 +731,8 @@
       },
       "targets": [
         {
-          "expr": "net_ping_latency_ms",
-          "legendFormat": "{{target}}",
+          "expr": "net_ping_latency_ms{target!=\"internet\"}",
+          "legendFormat": "{{service}}",
           "refId": "A"
         }
       ],

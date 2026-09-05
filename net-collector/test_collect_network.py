@@ -135,6 +135,64 @@ class NetworkCollectorTests(unittest.TestCase):
         name = collect_network.resolve_device_name("192.168.1.100", vendor="Apple Inc.")
         self.assertEqual(name, "Apple-Device-100")
 
+    def test_resolve_port_service(self):
+        # Khi có tên tiến trình thực tế
+        self.assertEqual(collect_network.resolve_port_service("41641", "udp", "tailscaled"), "tailscaled")
+        self.assertEqual(collect_network.resolve_port_service("10250", "tcp", "kubelet"), "kubelet")
+        
+        # Khi tiến trình bị rỗng (-) hoặc rỗng, dùng bảng tra cứu WELL_KNOWN_SERVICES
+        self.assertEqual(collect_network.resolve_port_service("53", "tcp", "-"), "systemd-resolved (DNS)")
+        self.assertEqual(collect_network.resolve_port_service("53", "udp", ""), "systemd-resolved (DNS)")
+        self.assertEqual(collect_network.resolve_port_service("10250", "tcp", "-"), "kubelet (K8s API)")
+        self.assertEqual(collect_network.resolve_port_service("41641", "udp", "-"), "tailscale (DERP/WireGuard)")
+        self.assertEqual(collect_network.resolve_port_service("3000", "tcp", "-"), "grafana")
+
+    def test_multi_target_latency_emission(self):
+        collect_network.slow_cache["latencies"] = {
+            "gateway": {"val": 0.8, "service": "Gateway", "category": "local_network"},
+            "vn_viettel": {"val": 3.2, "service": "Viettel DNS", "category": "domestic_vn"},
+            "cloudflare": {"val": 25.1, "service": "Cloudflare (1.1.1.1)", "category": "global_dns"},
+            "youtube": {"val": 12.5, "service": "YouTube", "category": "media_service"},
+        }
+        lines = []
+        collect_network.collect_network_metrics(lines)
+        self.assertTrue(any('net_ping_latency_ms{category="local_network",service="Gateway",target="gateway"} 0.8' in l for l in lines))
+        self.assertTrue(any('net_ping_latency_ms{category="domestic_vn",service="Viettel DNS",target="vn_viettel"} 3.2' in l for l in lines))
+        self.assertTrue(any('net_ping_latency_ms{category="global_dns",service="Cloudflare (1.1.1.1)",target="cloudflare"} 25.1' in l for l in lines))
+        self.assertTrue(any('net_ping_latency_ms{category="media_service",service="YouTube",target="youtube"} 12.5' in l for l in lines))
+
+    def test_get_open_listening_ports_ss_parsing(self):
+        mock_ss_output = """tcp LISTEN 0 128 0.0.0.0:10250 0.0.0.0:* users:(("kubelet",pid=800,fd=10))
+udp UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:* users:(("systemd-resolve",pid=320,fd=12))
+udp UNCONN 0 0 0.0.0.0:41641 0.0.0.0:* -
+tcp LISTEN 0 128 [::]:3000 [::]:* users:(("grafana",pid=1500,fd=7))
+"""
+        with mock.patch("subprocess.run") as mock_run:
+            mock_run.return_value = mock.Mock(returncode=0, stdout=mock_ss_output)
+            ports = collect_network.get_open_listening_ports()
+
+        self.assertEqual(len(ports), 4)
+        
+        # 10250 kubelet
+        p_10250 = next(p for p in ports if p["port"] == "10250")
+        self.assertEqual(p_10250["service"], "kubelet")
+        self.assertEqual(p_10250["exposure"], "Public / LAN")
+
+        # 53 systemd-resolved on loopback %lo
+        p_53 = next(p for p in ports if p["port"] == "53")
+        self.assertEqual(p_53["service"], "systemd-resolve")
+        self.assertEqual(p_53["exposure"], "Localhost Only")
+
+        # 41641 tailscale (khi ss trả về `-`, fallback sang WELL_KNOWN_SERVICES)
+        p_41641 = next(p for p in ports if p["port"] == "41641")
+        self.assertEqual(p_41641["service"], "tailscale (DERP/WireGuard)")
+        self.assertEqual(p_41641["exposure"], "Public / LAN")
+
+        # 3000 grafana on ::
+        p_3000 = next(p for p in ports if p["port"] == "3000")
+        self.assertEqual(p_3000["service"], "grafana")
+        self.assertEqual(p_3000["exposure"], "Public / LAN")
+
 
 if __name__ == "__main__":
     unittest.main()

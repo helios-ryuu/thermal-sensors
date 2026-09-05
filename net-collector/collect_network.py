@@ -31,7 +31,59 @@ TAILSCALE_SOCK = os.environ.get("TAILSCALE_SOCKET_PATH", "/var/run/tailscale/tai
 FAST_INTERVAL = float(os.environ.get("COLLECTOR_FAST_INTERVAL", "15"))
 SLOW_INTERVAL = float(os.environ.get("COLLECTOR_SLOW_INTERVAL", "120"))
 
-# Cache cho các phép kiểm tra chậm (NAT, STUN, traceroute)
+# Danh sách đích đo độ trễ Internet đa điểm
+LATENCY_TARGETS = [
+    ("vn_viettel", "Viettel DNS", "203.113.131.1", "domestic_vn"),
+    ("vn_vnpt", "VNPT DNS", "203.162.0.181", "domestic_vn"),
+    ("cloudflare", "Cloudflare (1.1.1.1)", "1.1.1.1", "global_dns"),
+    ("google", "Google (8.8.8.8)", "8.8.8.8", "global_dns"),
+    ("youtube", "YouTube", "youtube.com", "media_service"),
+    ("facebook", "Facebook", "facebook.com", "media_service"),
+    ("discord", "Discord", "discord.com", "chat_service"),
+    ("aws_asia", "AWS Asia (Singapore)", "s3.ap-southeast-1.amazonaws.com", "cloud_service"),
+    ("github", "GitHub", "github.com", "developer_service"),
+]
+
+# Ánh xạ cổng dịch vụ chuẩn dự phòng khi không trích xuất được PID
+WELL_KNOWN_SERVICES = {
+    (53, "tcp"): "systemd-resolved (DNS)",
+    (53, "udp"): "systemd-resolved (DNS)",
+    (68, "udp"): "dhclient (DHCP)",
+    (546, "udp"): "dhcpv6-client",
+    (10250, "tcp"): "kubelet (K8s API)",
+    (41641, "udp"): "tailscale (DERP/WireGuard)",
+    (45012, "tcp"): "tailscale-peer",
+    (56176, "tcp"): "tailscale-control",
+    (3000, "tcp"): "grafana",
+    (9090, "tcp"): "prometheus",
+    (9100, "tcp"): "node-exporter",
+    (22, "tcp"): "sshd",
+    (80, "tcp"): "http",
+    (443, "tcp"): "https",
+}
+
+
+def resolve_port_service(port_str, proto, proc_name=""):
+    """Phân giải tên dịch vụ / tiến trình, đảm bảo không trả về '-' rỗng."""
+    if proc_name and proc_name.strip() and proc_name.strip() != "-":
+        return proc_name.strip()
+    try:
+        p_num = int(port_str)
+        p_proto = proto.lower()
+        if (p_num, p_proto) in WELL_KNOWN_SERVICES:
+            return WELL_KNOWN_SERVICES[(p_num, p_proto)]
+        for (port_k, _), name in WELL_KNOWN_SERVICES.items():
+            if port_k == p_num:
+                return name
+        svc = socket.getservbyport(p_num, p_proto)
+        if svc:
+            return svc
+    except Exception:
+        pass
+    return f"port-{port_str}/{proto}"
+
+
+# Cache cho các phép kiểm tra chậm (NAT, STUN, traceroute, latency)
 slow_cache = {
     "last_run": 0.0,
     "cgnat": 0,
@@ -45,6 +97,7 @@ slow_cache = {
     "ping_dns": None,
     "ping_internet": None,
     "ping_derp": None,
+    "latencies": {},
 }
 
 
@@ -616,10 +669,13 @@ def get_public_ip_and_isp():
     public_ipv6 = "None"
     isp = "unknown"
 
-    # 1. Thử lấy IPv4 thật (chỉ chấp nhận địa chỉ version 4)
+    # 1. Thử lấy IPv4 thật kèm ISP (ưu tiên các nguồn trả cả IP và thông tin ASN/ISP)
     ipv4_endpoints = [
-        ["curl", "-4", "-s", "--max-time", "3", "https://api.ipify.org?format=json"],
         ["curl", "-4", "-s", "--max-time", "3", "https://ifconfig.co/json"],
+        ["curl", "-4", "-s", "--max-time", "3", "http://ip-api.com/json"],
+        ["curl", "-4", "-s", "--max-time", "3", "https://ipinfo.io/json"],
+        ["curl", "-4", "-s", "--max-time", "3", "https://api.ip.sb/geoip"],
+        ["curl", "-4", "-s", "--max-time", "2", "https://api.ipify.org?format=json"],
         ["curl", "-4", "-s", "--max-time", "2", "https://ipv4.icanhazip.com"],
         ["curl", "-4", "-s", "--max-time", "2", "https://v4.ident.me"],
     ]
@@ -632,9 +688,17 @@ def get_public_ip_and_isp():
                 if raw.startswith("{"):
                     try:
                         d = json.loads(raw)
-                        cand = d.get("ip", "")
+                        cand = d.get("ip") or d.get("query") or ""
                         if isp == "unknown":
-                            isp = d.get("asn_org", d.get("isp", "unknown"))
+                            cand_isp = (
+                                d.get("asn_org")
+                                or d.get("isp")
+                                or d.get("org")
+                                or d.get("organization")
+                                or ""
+                            )
+                            if cand_isp and cand_isp.strip().lower() != "unknown":
+                                isp = cand_isp.strip()
                     except Exception:
                         pass
                 else:
@@ -642,18 +706,42 @@ def get_public_ip_and_isp():
                 if cand:
                     try:
                         addr = ipaddress.ip_address(cand.strip())
-                        if addr.version == 4:
+                        if addr.version == 4 and not addr.is_private and not addr.is_loopback:
                             public_ipv4 = str(addr)
-                            break
+                            if isp != "unknown":
+                                break
                     except ValueError:
                         pass
         except Exception:
             pass
 
+    # Tra cứu bù thông tin ISP nếu đã có Public IPv4 nhưng ISP vẫn là unknown
+    if public_ipv4 != "None" and isp == "unknown":
+        lookup_cmds = [
+            ["curl", "-s", "--max-time", "3", f"http://ip-api.com/json/{public_ipv4}"],
+            ["curl", "-s", "--max-time", "3", f"https://ipinfo.io/{public_ipv4}/json"],
+        ]
+        for l_cmd in lookup_cmds:
+            try:
+                l_out = subprocess.run(l_cmd, capture_output=True, text=True, timeout=4)
+                if l_out.returncode == 0 and l_out.stdout.strip():
+                    l_data = json.loads(l_out.stdout.strip())
+                    cand_isp = (
+                        l_data.get("isp")
+                        or l_data.get("org")
+                        or l_data.get("as")
+                        or ""
+                    )
+                    if cand_isp and cand_isp.strip().lower() != "unknown":
+                        isp = cand_isp.strip()
+                        break
+            except Exception:
+                pass
+
     # 2. Thử lấy IPv6 thật (chỉ chấp nhận địa chỉ version 6 public toàn cầu)
     ipv6_endpoints = [
-        ["curl", "-6", "-s", "--max-time", "3", "https://api6.ipify.org?format=json"],
         ["curl", "-6", "-s", "--max-time", "3", "https://ifconfig.co/json"],
+        ["curl", "-6", "-s", "--max-time", "3", "https://api6.ipify.org?format=json"],
         ["curl", "-6", "-s", "--max-time", "2", "https://ipv6.icanhazip.com"],
         ["curl", "-6", "-s", "--max-time", "2", "https://v6.ident.me"],
     ]
@@ -666,9 +754,17 @@ def get_public_ip_and_isp():
                 if raw6.startswith("{"):
                     try:
                         d6 = json.loads(raw6)
-                        cand6 = d6.get("ip", "")
+                        cand6 = d6.get("ip") or d6.get("query") or ""
                         if isp == "unknown":
-                            isp = d6.get("asn_org", d6.get("isp", "unknown"))
+                            cand_isp = (
+                                d6.get("asn_org")
+                                or d6.get("isp")
+                                or d6.get("org")
+                                or d6.get("organization")
+                                or ""
+                            )
+                            if cand_isp and cand_isp.strip().lower() != "unknown":
+                                isp = cand_isp.strip()
                     except Exception:
                         pass
                 else:
@@ -738,18 +834,22 @@ def get_open_listening_ports():
                         port_part = local_addr[r_idx + 1 :]
 
                         # Phân loại mức độ phơi nhiễm (Exposure)
-                        if not ip_part or ip_part in ["0.0.0.0", "::"]:
+                        ip_clean = ip_part.split("%")[0]
+                        if not ip_clean or ip_clean in ["0.0.0.0", "::"]:
                             exposure = "Public / LAN"
-                        elif ip_part.startswith("100."):
+                        elif ip_clean.startswith("100."):
                             exposure = "Tailscale Only"
-                        elif ip_part in ["127.0.0.1", "::1"]:
+                        elif ip_clean in ["127.0.0.1", "::1"] or ip_clean.startswith("127."):
                             exposure = "Localhost Only"
                         else:
                             exposure = "Specific LAN"
 
-                        # Trích xuất process name
-                        proc_match = re.search(r'"([^"]+)"', proc_info)
-                        service_name = proc_match.group(1) if proc_match else proc_info
+                        # Trích xuất process name (hỗ trợ định dạng `users:(("name",pid=...))`)
+                        proc_match = re.search(r'users:\(\("([^"]+)"', line)
+                        if not proc_match:
+                            proc_match = re.search(r'"([^"]+)"', proc_info)
+                        raw_proc = proc_match.group(1) if proc_match else (proc_info if proc_info != "-" else "")
+                        service_name = resolve_port_service(port_part, proto, raw_proc)
 
                         ports.append({
                             "proto": proto,
@@ -938,12 +1038,40 @@ def collect_network_metrics(lines):
         else:
             slow_cache["cgnat"] = 0
 
-        # Đo ping latency
+        # Đo ping latency đa điểm
+        latency_results = {}
         if gateway_ip:
-            slow_cache["ping_gateway"] = ping_target(gateway_ip)
+            gw_lat = ping_target(gateway_ip)
+            if gw_lat is not None:
+                latency_results["gateway"] = {
+                    "val": gw_lat,
+                    "service": "Gateway",
+                    "category": "local_network",
+                }
+            slow_cache["ping_gateway"] = gw_lat
+
         if dns_servers:
-            slow_cache["ping_dns"] = ping_target(dns_servers[0])
-        slow_cache["ping_internet"] = ping_target("1.1.1.1")
+            dns_lat = ping_target(dns_servers[0])
+            if dns_lat is not None:
+                latency_results["dns"] = {
+                    "val": dns_lat,
+                    "service": "DNS",
+                    "category": "local_network",
+                }
+            slow_cache["ping_dns"] = dns_lat
+
+        for tid, tname, thost, tcat in LATENCY_TARGETS:
+            val = ping_target(thost)
+            if val is not None:
+                latency_results[tid] = {
+                    "val": val,
+                    "service": tname,
+                    "category": tcat,
+                }
+
+        slow_cache["latencies"] = latency_results
+        cf_lat = latency_results.get("cloudflare", {}).get("val")
+        slow_cache["ping_internet"] = cf_lat if cf_lat is not None else ping_target("1.1.1.1")
 
     # 2. Xuất metric NAT & WAN
     add_sample(lines, "net_nat_is_cgnat", slow_cache["cgnat"])
@@ -979,13 +1107,27 @@ def collect_network_metrics(lines):
     for idx, dns in enumerate(dns_servers[:3]):
         add_sample(lines, "net_dns_server_info", 1, {"dns_ip": dns, "priority": str(idx + 1)})
 
-    # 4. Xuất Latency
-    if slow_cache["ping_gateway"] is not None:
-        add_sample(lines, "net_ping_latency_ms", slow_cache["ping_gateway"], {"target": "gateway"})
-    if slow_cache["ping_dns"] is not None:
-        add_sample(lines, "net_ping_latency_ms", slow_cache["ping_dns"], {"target": "dns"})
-    if slow_cache["ping_internet"] is not None:
-        add_sample(lines, "net_ping_latency_ms", slow_cache["ping_internet"], {"target": "internet"})
+    # 4. Xuất Latency đa điểm
+    for tid, tinfo in slow_cache.get("latencies", {}).items():
+        if tinfo.get("val") is not None:
+            add_sample(
+                lines,
+                "net_ping_latency_ms",
+                tinfo["val"],
+                {
+                    "target": tid,
+                    "service": tinfo["service"],
+                    "category": tinfo["category"],
+                },
+            )
+    # Tương thích ngược: target="internet" nếu chưa có trong latencies
+    if "internet" not in slow_cache.get("latencies", {}) and slow_cache.get("ping_internet") is not None:
+        add_sample(
+            lines,
+            "net_ping_latency_ms",
+            slow_cache["ping_internet"],
+            {"target": "internet", "service": "Internet (Cloudflare)", "category": "global_dns"},
+        )
 
     # 5. Xuất Topology Interfaces
     for iface in get_network_interfaces():

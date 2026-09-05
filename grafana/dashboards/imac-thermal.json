@@ -1039,7 +1039,7 @@
       },
       "targets": [
         {
-          "expr": "thermal_temperature_celsius{component=~\"gpu|pch|nvme|applesmc\"}",
+          "expr": "thermal_temperature_celsius{component=~\"gpu|pch|nvme|applesmc\",sensor!=\"air_intake\"}",
           "legendFormat": "{{component}} / {{sensor}}",
           "refId": "A"
         }
