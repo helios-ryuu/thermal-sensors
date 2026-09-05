@@ -231,6 +231,39 @@ tcp LISTEN 0 128 [::]:3000 [::]:* users:(("grafana",pid=1500,fd=7))
             self.assertIn("192.168.1.20", res)
             self.assertEqual(res["192.168.1.1"]["device_type"], "Router / Gateway")
 
+    def test_ping_target_multi_host(self):
+        # Case 1: Host đầu tiên thất bại, host thứ hai thành công
+        def mock_subprocess_run(cmd, **kwargs):
+            target = cmd[-1]
+            if target == "facebook.com":
+                return mock.Mock(returncode=1, stdout="")
+            elif target == "m.facebook.com":
+                return mock.Mock(returncode=0, stdout="64 bytes from ...: time=45.2 ms\n64 bytes from ...: time=42.1 ms")
+            return mock.Mock(returncode=1, stdout="")
+
+        with mock.patch("subprocess.run", side_effect=mock_subprocess_run):
+            lat = collect_network.ping_target(["facebook.com", "m.facebook.com"])
+            self.assertEqual(lat, 42.1)
+
+    def test_latency_cache_retention_on_drop(self):
+        # Giả lập chu kỳ trước đo thành công Facebook
+        collect_network.slow_cache["last_run"] = 0
+        collect_network.slow_cache["latencies"] = {
+            "facebook": {"val": 53.7, "service": "Facebook", "category": "media_service"}
+        }
+        collect_network.slow_cache["latency_fail_counts"] = {"facebook": 0}
+
+        # Chu kỳ hiện tại: ping_target trả về None (rớt gói)
+        with mock.patch.object(collect_network, "ping_target", return_value=None):
+            lines = []
+            collect_network.collect_network_metrics(lines)
+            
+            # Kiểm tra giá trị Facebook vẫn được bảo lưu (không bị biến mất khỏi metric)
+            self.assertIn("facebook", collect_network.slow_cache["latencies"])
+            self.assertEqual(collect_network.slow_cache["latencies"]["facebook"]["val"], 53.7)
+            self.assertEqual(collect_network.slow_cache["latency_fail_counts"]["facebook"], 1)
+            self.assertTrue(any('net_ping_latency_ms{category="media_service",service="Facebook",target="facebook"} 53.7' in l for l in lines))
+
 
 if __name__ == "__main__":
     unittest.main()

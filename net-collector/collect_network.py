@@ -35,11 +35,11 @@ SLOW_INTERVAL = float(os.environ.get("COLLECTOR_SLOW_INTERVAL", "120"))
 # Danh sách đích đo độ trễ Internet đa điểm
 LATENCY_TARGETS = [
     ("vn_viettel", "Viettel DNS", "203.113.131.1", "domestic_vn"),
-    ("vn_vnpt", "VNPT DNS", "203.162.0.181", "domestic_vn"),
+    ("vn_vnpt", "VNPT DNS", ["203.162.0.181", "203.162.4.190"], "domestic_vn"),
     ("cloudflare", "Cloudflare (1.1.1.1)", "1.1.1.1", "global_dns"),
     ("google", "Google (8.8.8.8)", "8.8.8.8", "global_dns"),
     ("youtube", "YouTube", "youtube.com", "media_service"),
-    ("facebook", "Facebook", "facebook.com", "media_service"),
+    ("facebook", "Facebook", ["facebook.com", "m.facebook.com"], "media_service"),
     ("discord", "Discord", "discord.com", "chat_service"),
     ("aws_asia", "AWS Asia (Singapore)", "s3.ap-southeast-1.amazonaws.com", "cloud_service"),
     ("github", "GitHub", "github.com", "developer_service"),
@@ -807,22 +807,24 @@ def detect_double_nat_and_cgnat(gateway_ip, public_ip=None):
 
 
 def ping_target(target):
-    """Đo độ trễ (latency ms) đến một IP mục tiêu bằng ping 1 gói."""
+    """Đo độ trễ (latency ms) đến một IP/host mục tiêu (hỗ trợ danh sách host dự phòng, ping 2 gói IPv4)."""
     if not target:
         return None
-    try:
-        out = subprocess.run(
-            ["ping", "-c", "1", "-W", "1", str(target)],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        if out.returncode == 0:
-            match = re.search(r"time=([0-9.]+)\s*ms", out.stdout)
-            if match:
-                return float(match.group(1))
-    except Exception:
-        pass
+    hosts = [target] if isinstance(target, str) else list(target)
+    for h in hosts:
+        try:
+            out = subprocess.run(
+                ["ping", "-4", "-c", "2", "-W", "2", str(h)],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if out.returncode == 0:
+                matches = re.findall(r"time=([0-9.]+)\s*ms", out.stdout)
+                if matches:
+                    return round(min(float(m) for m in matches), 3)
+        except Exception:
+            pass
     return None
 
 
@@ -1202,36 +1204,59 @@ def collect_network_metrics(lines):
             slow_cache["cgnat"] = 0
 
         # Đo ping latency đa điểm
+        prev_latencies = slow_cache.get("latencies", {})
+        latency_fail_counts = slow_cache.get("latency_fail_counts", {})
         latency_results = {}
+
         if gateway_ip:
             gw_lat = ping_target(gateway_ip)
             if gw_lat is not None:
+                latency_fail_counts["gateway"] = 0
                 latency_results["gateway"] = {
                     "val": gw_lat,
                     "service": "Gateway",
                     "category": "local_network",
                 }
-            slow_cache["ping_gateway"] = gw_lat
+            elif "gateway" in prev_latencies and latency_fail_counts.get("gateway", 0) < 3:
+                latency_fail_counts["gateway"] = latency_fail_counts.get("gateway", 0) + 1
+                latency_results["gateway"] = prev_latencies["gateway"]
+            else:
+                latency_fail_counts["gateway"] = latency_fail_counts.get("gateway", 0) + 1
+            slow_cache["ping_gateway"] = latency_results.get("gateway", {}).get("val")
 
         if dns_servers:
             dns_lat = ping_target(dns_servers[0])
             if dns_lat is not None:
+                latency_fail_counts["dns"] = 0
                 latency_results["dns"] = {
                     "val": dns_lat,
                     "service": "DNS",
                     "category": "local_network",
                 }
-            slow_cache["ping_dns"] = dns_lat
+            elif "dns" in prev_latencies and latency_fail_counts.get("dns", 0) < 3:
+                latency_fail_counts["dns"] = latency_fail_counts.get("dns", 0) + 1
+                latency_results["dns"] = prev_latencies["dns"]
+            else:
+                latency_fail_counts["dns"] = latency_fail_counts.get("dns", 0) + 1
+            slow_cache["ping_dns"] = latency_results.get("dns", {}).get("val")
 
         for tid, tname, thost, tcat in LATENCY_TARGETS:
             val = ping_target(thost)
             if val is not None:
+                latency_fail_counts[tid] = 0
                 latency_results[tid] = {
                     "val": val,
                     "service": tname,
                     "category": tcat,
                 }
+            elif tid in prev_latencies and latency_fail_counts.get(tid, 0) < 3:
+                # Giữ lại giá trị đo gần nhất nếu chỉ rớt gói 1-2 chu kỳ liên tiếp (tránh gauge dial biến mất)
+                latency_fail_counts[tid] = latency_fail_counts.get(tid, 0) + 1
+                latency_results[tid] = prev_latencies[tid]
+            else:
+                latency_fail_counts[tid] = latency_fail_counts.get(tid, 0) + 1
 
+        slow_cache["latency_fail_counts"] = latency_fail_counts
         slow_cache["latencies"] = latency_results
         cf_lat = latency_results.get("cloudflare", {}).get("val")
         slow_cache["ping_internet"] = cf_lat if cf_lat is not None else ping_target("1.1.1.1")
