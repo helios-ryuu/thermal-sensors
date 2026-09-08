@@ -15,6 +15,8 @@ import socket
 import logging
 import threading
 import subprocess
+import ctypes
+import ipaddress
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -24,7 +26,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Import thư viện bổ trợ nếu có
+# Import optional libraries
 try:
     import psutil
 except ImportError:
@@ -35,20 +37,18 @@ try:
 except ImportError:
     pynvml = None
 
-# Cấu hình logging
+# Logging setup
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
-# Cấu hình chu kỳ
 METRICS_PORT = int(os.environ.get("AGENT_PORT", "9100"))
 BIND_IP = os.environ.get("AGENT_BIND_IP", "0.0.0.0")
-FAST_INTERVAL = float(os.environ.get("AGENT_FAST_INTERVAL", "5"))   # 5s: Thermals, Watts, Voltages, CPU, RAM
-SLOW_INTERVAL = float(os.environ.get("AGENT_SLOW_INTERVAL", "60"))  # 60s: EventLog, WAN/ISP, Ping Dials, Traceroute
+FAST_INTERVAL = float(os.environ.get("AGENT_FAST_INTERVAL", "5"))   # 5s: Thermals, Watts, Voltages, CPU, RAM, IO
+SLOW_INTERVAL = float(os.environ.get("AGENT_SLOW_INTERVAL", "60"))  # 60s: EventLog, Ping Dials, Inventory, Disks
 
-# Danh sách đích ping độ trễ đa điểm (Kế thừa từ bộ lọc ổn định)
 LATENCY_TARGETS = [
     ("vn_viettel", "Viettel DNS", "203.113.131.1", "domestic_vn"),
     ("vn_vnpt", "VNPT DNS", ["203.162.0.181", "203.162.4.190"], "domestic_vn"),
@@ -61,7 +61,6 @@ LATENCY_TARGETS = [
     ("github", "GitHub", "github.com", "developer_service"),
 ]
 
-# Bảng dịch mã Bugcheck Code của Windows Kernel-Power
 KNOWN_BUGCHECKS = {
     0x00000000: ("HARD_POWER_OFF_OR_THERMAL_TRIP", "Tắt phụt nguồn đột ngột do PSU sụt áp / quá tải OCP hoặc chạm ngưỡng ngắt nhiệt Tjunction"),
     0x00000116: ("VIDEO_TDR_FAILURE", "GPU Driver (nvlddmkm.sys) bị treo hoặc crash do quá nhiệt VRAM/xung nhịp không ổn định"),
@@ -75,7 +74,6 @@ KNOWN_BUGCHECKS = {
     0x0000009F: ("DRIVER_POWER_STATE_FAILURE", "Lỗi chuyển đổi trạng thái nguồn/Sleep/Hibernate của driver"),
 }
 
-# Cache toàn cục chia sẻ giữa thread thu thập và HTTP Server
 state_lock = threading.Lock()
 metrics_output_text = ""
 slow_cache = {
@@ -87,19 +85,24 @@ slow_cache = {
     "public_ipv4": "None",
     "public_ipv6": "None",
     "isp": "unknown",
+    "gateway_ip": "",
+    "dns_servers": [],
     "double_nat": 0,
     "cgnat": 0,
+    "tailscale_online": 0,
     "latencies": {},
     "latency_fail_counts": {},
+    "device_inventory": [],
+    "disk_temperatures": [],
+    "firewall_settings": {},
 }
 
 
 # ==============================================================================
-# 1. HỘP ĐEN KHÁM NGHIỆM EVENT LOG (POST-MORTEM CRASH ENGINE)
+# 1. POST-MORTEM CRASH ENGINE (EVENT LOG ID 41 & BUGCHECK)
 # ==============================================================================
 
 def parse_bugcheck_code(code_val):
-    """Chuyển đổi số nguyên BugcheckCode sang mã Hex và tên định danh."""
     try:
         if isinstance(code_val, str):
             code_int = int(code_val, 0)
@@ -117,50 +120,34 @@ def parse_bugcheck_code(code_val):
 
 
 def query_windows_crash_events():
-    """
-    Truy vấn Windows System Event Log để lấy lịch sử Kernel-Power Event 41
-    và các sự kiện sập nguồn bất thường (ID 6008, 1001, WHEA).
-    """
     crashes = []
     last_crash = {}
     is_unexpected_boot = 0
-    whea_total = 0
+    whea_count = 0
 
-    # Lệnh PowerShell nhẹ để lấy tối đa 10 sự kiện Kernel-Power Event ID 41
-    ps_cmd = [
-        "powershell", "-NoProfile", "-NonInteractive", "-Command",
-        """
-        try {
-            $events = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power'; Id=41} -MaxEvents 10 -ErrorAction SilentlyContinue
-            if ($events) {
-                $events | ForEach-Object {
-                    $xml = [xml]$_.ToXml()
-                    $eventData = $xml.Event.EventData.Data
-                    $bCode = 0
-                    $bParam1 = '0x0'
-                    if ($eventData) {
-                        foreach ($d in $eventData) {
-                            if ($d.Name -eq 'BugcheckCode') { $bCode = $d.'#text' }
-                            if ($d.Name -eq 'BugcheckParameter1') { $bParam1 = $d.'#text' }
-                        }
-                    }
-                    [PSCustomObject]@{
-                        TimeCreated = $_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
-                        Epoch = [int64]($_.TimeCreated.ToUniversalTime() - (Get-Date '1970-01-01')).TotalSeconds
-                        BugcheckCode = $bCode
-                        BugcheckParam1 = $bParam1
-                    }
-                } | ConvertTo-Json -Compress
-            } else { '[]' }
-        } catch { '[]' }
-        """
-    ]
+    ps_script = """
+    $events = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power'; Id=41} -MaxEvents 10 -ErrorAction SilentlyContinue
+    if ($events) {
+        $events | ForEach-Object {
+            $xml = [xml]$_.ToXml()
+            $eventData = @{}
+            $xml.Event.EventData.Data | ForEach-Object { $eventData[$_.Name] = $_.'#text' }
+            [PSCustomObject]@{
+                TimeCreated = $_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
+                Epoch = [int64]($_.TimeCreated.ToUniversalTime() - [datetime]'1970-01-01').TotalSeconds
+                BugcheckCode = if ($eventData['BugcheckCode']) { $eventData['BugcheckCode'] } else { '0' }
+                BugcheckParam1 = if ($eventData['BugcheckParameter1']) { $eventData['BugcheckParameter1'] } else { '0x0' }
+                PowerButtonTimestamp = if ($eventData['PowerButtonTimestamp']) { $eventData['PowerButtonTimestamp'] } else { '0' }
+            }
+        } | ConvertTo-Json -Compress
+    } else { '[]' }
+    """
 
     try:
-        out = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=8)
+        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                             capture_output=True, text=True, timeout=8)
         if out.returncode == 0 and out.stdout.strip():
             raw_text = out.stdout.strip()
-            # Xử lý khi PowerShell trả về 1 object đơn lẻ thay vì mảng JSON
             if raw_text.startswith("{") and raw_text.endswith("}"):
                 items = [json.loads(raw_text)]
             elif raw_text.startswith("[") and raw_text.endswith("]"):
@@ -183,36 +170,28 @@ def query_windows_crash_events():
 
             if crashes:
                 last_crash = crashes[0]
-                # Nếu lần crash gần nhất xảy ra trong vòng 15 phút sau khi máy boot -> đánh dấu unexpected
                 boot_time = psutil.boot_time() if psutil else 0
                 if abs(last_crash["epoch"] - boot_time) < 1800:
                     is_unexpected_boot = 1
     except Exception as e:
-        logging.warning(f"Error reading Event ID 41 from Event Log: {e}")
+        logging.debug(f"Error querying Kernel-Power 41: {e}")
 
-    # Đếm số lỗi phần cứng WHEA trong 24h
-    whea_cmd = [
-        "powershell", "-NoProfile", "-NonInteractive", "-Command",
-        """
-        try {
-            $d = (Get-Date).AddDays(-1)
-            $c = (Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-WHEA-Logger'; StartTime=$d} -ErrorAction SilentlyContinue).Count
-            if ($c) { $c } else { 0 }
-        } catch { 0 }
-        """
-    ]
     try:
-        w_out = subprocess.run(whea_cmd, capture_output=True, text=True, timeout=5)
+        whea_script = """
+        (Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-WHEA-Logger'; StartTime=(Get-Date).AddHours(-24)} -ErrorAction SilentlyContinue).Count
+        """
+        w_out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", whea_script],
+                               capture_output=True, text=True, timeout=5)
         if w_out.returncode == 0 and w_out.stdout.strip().isdigit():
-            whea_total = int(w_out.stdout.strip())
+            whea_count = int(w_out.stdout.strip())
     except Exception:
         pass
 
-    return crashes, last_crash, is_unexpected_boot, whea_total
+    return crashes, last_crash, is_unexpected_boot, whea_count
 
 
 # ==============================================================================
-# 2. GIÁM SÁT CARD ĐỒ HỌA NVIDIA (CORE, HOTSPOT, VRAM, WATTS, THROTTLE)
+# 2. NVIDIA GPU METRICS (NVAPI, NVML FIELD VALUES, PYNVML, NVIDIA-SMI)
 # ==============================================================================
 
 _nvml_initialized = False
@@ -221,28 +200,99 @@ def init_nvml():
     global _nvml_initialized
     if _nvml_initialized:
         return True
-    if pynvml:
-        try:
-            pynvml.nvmlInit()
-            _nvml_initialized = True
-            return True
-        except Exception as e:
-            logging.debug(f"Could not initialize pynvml: {e}")
-    return False
+    if not pynvml:
+        return False
+    try:
+        pynvml.nvmlInit()
+        _nvml_initialized = True
+        return True
+    except Exception as e:
+        logging.debug(f"Could not initialize NVML: {e}")
+        return False
+
+
+class _NvSensor(ctypes.Structure):
+    _fields_ = [
+        ("controller", ctypes.c_int),
+        ("defaultMinTemp", ctypes.c_int),
+        ("defaultMaxTemp", ctypes.c_int),
+        ("currentTemp", ctypes.c_int),
+        ("target", ctypes.c_int),
+    ]
+
+class _NvThermalSettings(ctypes.Structure):
+    _fields_ = [
+        ("version", ctypes.c_uint32),
+        ("count", ctypes.c_uint32),
+        ("sensor", _NvSensor * 32),
+    ]
+
+def query_nvapi_thermals():
+    res = {}
+    if sys.platform != "win32":
+        return res
+    try:
+        nvapi = ctypes.windll.LoadLibrary("nvapi64.dll")
+        nvapi.nvapi_QueryInterface.restype = ctypes.c_void_p
+        nvapi.nvapi_QueryInterface.argtypes = [ctypes.c_uint32]
+
+        init_ptr = nvapi.nvapi_QueryInterface(0x0150E828) # NvAPI_Initialize
+        if not init_ptr:
+            return res
+        NvAPI_Initialize = ctypes.WINFUNCTYPE(ctypes.c_int)(init_ptr)
+        if NvAPI_Initialize() != 0:
+            return res
+
+        enum_ptr = nvapi.nvapi_QueryInterface(0xE3640561) # NvAPI_EnumPhysicalGPUs
+        if not enum_ptr:
+            return res
+        NvAPI_EnumPhysicalGPUs = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.POINTER(ctypes.c_int))(enum_ptr)
+
+        gpu_handles = (ctypes.c_void_p * 64)()
+        gpu_count = ctypes.c_int(0)
+        if NvAPI_EnumPhysicalGPUs(gpu_handles, ctypes.byref(gpu_count)) != 0 or gpu_count.value <= 0:
+            return res
+
+        therm_ptr = nvapi.nvapi_QueryInterface(0xE4C63B40) # NvAPI_GPU_GetThermalSettings
+        if not therm_ptr:
+            return res
+        NvAPI_GPU_GetThermalSettings = ctypes.WINFUNCTYPE(
+            ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(_NvThermalSettings)
+        )(therm_ptr)
+
+        for i in range(gpu_count.value):
+            h = gpu_handles[i]
+            settings = _NvThermalSettings()
+            settings.version = ctypes.sizeof(_NvThermalSettings) | (2 << 16)
+            settings.count = 0
+            if NvAPI_GPU_GetThermalSettings(h, 15, ctypes.byref(settings)) == 0:
+                core = None
+                hotspot = None
+                vram = None
+                for s_idx in range(min(settings.count, 32)):
+                    s = settings.sensor[s_idx]
+                    t_val = float(s.currentTemp)
+                    if 0 < t_val < 130:
+                        if s.target == 1 and core is None:
+                            core = t_val
+                        elif s.target == 2 and vram is None:
+                            vram = t_val
+                        elif s.target in (8, 9) and hotspot is None:
+                            hotspot = t_val
+                        elif s_idx == 1 and hotspot is None:
+                            hotspot = t_val
+                        elif s_idx == 2 and vram is None:
+                            vram = t_val
+                res[i] = {"core": core, "hotspot": hotspot, "vram": vram}
+    except Exception as e:
+        logging.debug(f"NVAPI thermals error: {e}")
+    return res
 
 
 def collect_nvidia_gpu_metrics():
-    """
-    Thu thập chỉ số GPU NVIDIA với trọng tâm:
-    - GPU Core Temp, Hotspot Temp, VRAM/Memory Temp
-    - Delta Hotspot (Hotspot - Core)
-    - Power Draw (Watts) so với Power Limit
-    - Fan Speed RPM & Percent
-    - Throttle Reasons (Bảo vệ nhiệt / sụt nguồn)
-    """
     gpus = []
 
-    # Cách 1: Sử dụng pynvml (nhanh, chuẩn xác, trực tiếp từ nvml.dll)
+    # 1. Native pynvml
     if init_nvml():
         try:
             device_count = pynvml.nvmlDeviceGetCount()
@@ -252,29 +302,41 @@ def collect_nvidia_gpu_metrics():
                 if isinstance(name, bytes):
                     name = name.decode("utf-8")
 
-                # Nhiệt độ Core
+                # Core Temp
                 try:
-                    temp_core = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                    temp_core = float(pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU))
                 except Exception:
                     temp_core = None
 
-                # Nhiệt độ Hotspot (nếu driver/GPU hỗ trợ)
                 temp_hotspot = None
-                try:
-                    # Sensor 1 thường là GPU Hotspot trên RTX 30/40
-                    temp_hotspot = pynvml.nvmlDeviceGetTemperature(handle, 1)
-                except Exception:
-                    pass
-
-                # Nhiệt độ VRAM / Memory
                 temp_mem = None
+
+                # Try NVML Field Values for Hotspot & Memory (Driver 510+)
                 try:
-                    # Sensor 2 thường là VRAM / Memory
-                    temp_mem = pynvml.nvmlDeviceGetTemperature(handle, 2)
+                    class _NvmlFieldValue(ctypes.Structure):
+                        _fields_ = [
+                            ("fieldId", ctypes.c_uint32),
+                            ("scopeId", ctypes.c_uint32),
+                            ("timestamp", ctypes.c_int64),
+                            ("latencyUsec", ctypes.c_int64),
+                            ("valueType", ctypes.c_int32),
+                            ("nvmlReturn", ctypes.c_int32),
+                            ("value", ctypes.c_int64),
+                        ]
+                    fields = (_NvmlFieldValue * 2)()
+                    fields[0].fieldId = 74 # NVML_FI_DEV_MEMORY_TEMP
+                    fields[1].fieldId = 75 # NVML_FI_DEV_HOTSPOT_TEMP
+                    if hasattr(pynvml, "nvmlDeviceGetFieldValues"):
+                        ret = pynvml.nvmlDeviceGetFieldValues(handle, 2, ctypes.byref(fields))
+                        if ret == 0:
+                            if fields[0].nvmlReturn == 0 and 0 < fields[0].value < 130:
+                                temp_mem = float(fields[0].value)
+                            if fields[1].nvmlReturn == 0 and 0 < fields[1].value < 130:
+                                temp_hotspot = float(fields[1].value)
                 except Exception:
                     pass
 
-                # Công suất (Watts)
+                # Power
                 power_w = None
                 try:
                     power_mw = pynvml.nvmlDeviceGetPowerUsage(handle)
@@ -289,18 +351,16 @@ def collect_nvidia_gpu_metrics():
                 except Exception:
                     pass
 
-                # Quạt
                 fan_pct = None
                 try:
-                    fan_pct = pynvml.nvmlDeviceGetFanSpeed(handle)
+                    fan_pct = float(pynvml.nvmlDeviceGetFanSpeed(handle))
                 except Exception:
                     pass
 
-                # Tải & VRAM
                 util_gpu = None
                 try:
                     rates = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                    util_gpu = rates.gpu
+                    util_gpu = float(rates.gpu)
                 except Exception:
                     pass
 
@@ -313,7 +373,6 @@ def collect_nvidia_gpu_metrics():
                 except Exception:
                     pass
 
-                # Xung nhịp
                 clock_core = None
                 clock_mem = None
                 try:
@@ -340,22 +399,30 @@ def collect_nvidia_gpu_metrics():
         except Exception as e:
             logging.debug(f"Error reading NVML: {e}")
 
-    # Cách 2: Dự phòng qua nvidia-smi.exe nếu pynvml chưa có hoặc thiếu Hotspot
-    if not gpus or any(g["temp_hotspot"] is None for g in gpus):
+    # 2. NVAPI Direct Query for Hotspot / VRAM
+    nvapi_map = query_nvapi_thermals()
+    for idx, g in enumerate(gpus):
+        nv = nvapi_map.get(idx, {})
+        if g.get("temp_hotspot") is None and nv.get("hotspot") is not None:
+            g["temp_hotspot"] = nv["hotspot"]
+        if g.get("temp_mem") is None and nv.get("vram") is not None:
+            g["temp_mem"] = nv["vram"]
+        if g.get("temp_core") is None and nv.get("core") is not None:
+            g["temp_core"] = nv["core"]
+
+    # 3. Fallback to nvidia-smi if NVML completely failed
+    if not gpus:
         smi_data = query_nvidia_smi()
         if smi_data:
-            if not gpus:
-                gpus = smi_data
-            else:
-                # Bổ sung Hotspot từ nvidia-smi nếu pynvml không lấy được
-                for idx, g in enumerate(gpus):
-                    if idx < len(smi_data):
-                        if g["temp_hotspot"] is None and smi_data[idx].get("temp_hotspot") is not None:
-                            g["temp_hotspot"] = smi_data[idx]["temp_hotspot"]
-                        if g["temp_mem"] is None and smi_data[idx].get("temp_mem") is not None:
-                            g["temp_mem"] = smi_data[idx]["temp_mem"]
+            gpus = smi_data
+            for idx, g in enumerate(gpus):
+                nv = nvapi_map.get(idx, {})
+                if nv.get("hotspot") is not None:
+                    g["temp_hotspot"] = nv["hotspot"]
+                if nv.get("vram") is not None:
+                    g["temp_mem"] = nv["vram"]
 
-    # Tính toán Hotspot Delta (Hotspot - Core) cho từng GPU
+    # Calculate Hotspot Delta (Hotspot - Core)
     for g in gpus:
         if g.get("temp_core") is not None and g.get("temp_hotspot") is not None:
             g["hotspot_delta"] = round(g["temp_hotspot"] - g["temp_core"], 2)
@@ -366,9 +433,7 @@ def collect_nvidia_gpu_metrics():
 
 
 def query_nvidia_smi():
-    """Fallback truy vấn nvidia-smi CLI trích xuất Core, Hotspot và Power."""
     results = []
-    # nvidia-smi query
     cmd = [
         "nvidia-smi",
         "--query-gpu=index,name,temperature.gpu,temperature.memory,power.draw,power.limit,utilization.gpu,memory.used,memory.total,clocks.current.graphics,clocks.current.memory,fan.speed",
@@ -413,14 +478,10 @@ def query_nvidia_smi():
 
 
 # ==============================================================================
-# 3. GIÁM SÁT NGUỒN (ĐƯỜNG 12V/5V/3.3V), CPU & Ổ CỨNG NVMe
+# 3. PSU VOLTAGES (12V, 5V, 3.3V), CPU POWER & PHYSICAL DISK THERMALS
 # ==============================================================================
 
 def collect_motherboard_and_cpu_power():
-    """
-    Truy vấn cảm biến điện áp PSU bo mạch chủ (đường 12V, 5V, 3.3V)
-    và công suất tiêu thụ của CPU (Watts) qua WMI / LibreHardwareMonitor.
-    """
     data = {
         "v12": None,
         "v5": None,
@@ -430,7 +491,6 @@ def collect_motherboard_and_cpu_power():
         "nvme_temps": {},
     }
 
-    # Thử đọc qua LibreHardwareMonitor WMI namespace nếu LHM đang chạy nền
     ps_cmd = [
         "powershell", "-NoProfile", "-NonInteractive", "-Command",
         """
@@ -467,7 +527,6 @@ def collect_motherboard_and_cpu_power():
                 except Exception:
                     continue
 
-                # Điện áp
                 if stype == "voltage":
                     if "+12v" in name or "12v" in name or "vin" in name:
                         if 10.0 <= fval <= 14.0:
@@ -479,22 +538,18 @@ def collect_motherboard_and_cpu_power():
                         if 2.8 <= fval <= 3.8:
                             data["v33"] = round(fval, 3)
 
-                # Công suất CPU (Watts)
                 elif stype == "power":
                     if "cpu package" in name or "package" in name or "cpu total" in name:
                         data["cpu_power_w"] = round(fval, 2)
 
-                # Nhiệt độ CPU
                 elif stype == "temperature":
                     if "cpu package" in name or "package" in name or "core max" in name:
                         data["cpu_temp_package"] = round(fval, 1)
                     elif "nvme" in name or "ssd" in name or "drive" in name:
                         data["nvme_temps"][s.get("Name", "NVMe")] = round(fval, 1)
-
     except Exception:
         pass
 
-    # Nếu WMI của LHM không có, thử fallback đọc nhiệt độ ACPI ThermalZone chuẩn của Windows
     if data["cpu_temp_package"] is None:
         try:
             acpi_cmd = [
@@ -503,7 +558,6 @@ def collect_motherboard_and_cpu_power():
             ]
             acpi_out = subprocess.run(acpi_cmd, capture_output=True, text=True, timeout=4)
             if acpi_out.returncode == 0 and acpi_out.stdout.strip().isdigit():
-                # MSAcpi trả về phần mười độ Kelvin (tenths of Kelvin)
                 kelvin_tenths = float(acpi_out.stdout.strip())
                 celsius = round((kelvin_tenths / 10.0) - 273.15, 1)
                 if 0 < celsius < 125:
@@ -514,12 +568,54 @@ def collect_motherboard_and_cpu_power():
     return data
 
 
+def collect_windows_disk_temperatures():
+    disks = []
+    ps_cmd = [
+        "powershell", "-NoProfile", "-NonInteractive", "-Command",
+        """
+        Get-PhysicalDisk | ForEach-Object {
+            $d = $_
+            $rel = $d | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+            $temp = if ($rel -and $rel.Temperature) { $rel.Temperature } else { $null }
+            [PSCustomObject]@{
+                FriendlyName = $d.FriendlyName
+                MediaType = $d.MediaType
+                BusType = $d.BusType
+                DeviceId = $d.DeviceId
+                Temperature = $temp
+            }
+        } | ConvertTo-Json -Compress
+        """
+    ]
+    try:
+        out = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=6)
+        if out.returncode == 0 and out.stdout.strip():
+            raw = out.stdout.strip()
+            items = [json.loads(raw)] if raw.startswith("{") else json.loads(raw)
+            for it in items:
+                temp = it.get("Temperature")
+                if temp is not None:
+                    try:
+                        ftemp = float(temp)
+                        if 0 <= ftemp <= 125:
+                            disks.append({
+                                "name": it.get("FriendlyName", f"Disk {it.get('DeviceId', 0)}"),
+                                "media": it.get("MediaType", "SSD"),
+                                "bus": it.get("BusType", "NVMe"),
+                                "temp": ftemp,
+                            })
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    return disks
+
+
 # ==============================================================================
-# 4. GIÁM SÁT TÀI NGUYÊN HỆ THỐNG (PSUTIL / WINDOWS API)
+# 4. SYSTEM RESOURCES (CPU, RAM, DISK IO, NET IO, UPTIME)
 # ==============================================================================
 
 def collect_system_resources():
-    """Thu thập CPU%, RAM, Pagefile (Committed), Phân vùng ổ C:, D: và IOPS."""
     data = {
         "cpu_percent_total": 0.0,
         "cpu_percent_cores": [],
@@ -530,8 +626,16 @@ def collect_system_resources():
         "pagefile_used": 0,
         "pagefile_pct": 0.0,
         "disks": [],
-        "disk_read_bytes_sec": 0,
-        "disk_write_bytes_sec": 0,
+        "disk_read_bytes_total": 0,
+        "disk_written_bytes_total": 0,
+        "disk_reads_completed_total": 0,
+        "disk_writes_completed_total": 0,
+        "net_bytes_recv_total": 0,
+        "net_bytes_sent_total": 0,
+        "net_drop_in_total": 0,
+        "net_drop_out_total": 0,
+        "net_err_in_total": 0,
+        "net_err_out_total": 0,
         "uptime_sec": 0,
     }
 
@@ -552,7 +656,6 @@ def collect_system_resources():
 
             data["uptime_sec"] = int(time.time() - psutil.boot_time())
 
-            # Ổ đĩa C:, D:...
             for part in psutil.disk_partitions(all=False):
                 if "cdrom" in part.opts or part.fstype == "":
                     continue
@@ -570,11 +673,22 @@ def collect_system_resources():
                 except Exception:
                     pass
 
-            # Disk IO
             dio = psutil.disk_io_counters()
             if dio:
-                data["disk_read_bytes"] = dio.read_bytes
-                data["disk_write_bytes"] = dio.write_bytes
+                data["disk_read_bytes_total"] = dio.read_bytes
+                data["disk_written_bytes_total"] = dio.write_bytes
+                data["disk_reads_completed_total"] = dio.read_count
+                data["disk_writes_completed_total"] = dio.write_count
+
+            nio = psutil.net_io_counters()
+            if nio:
+                data["net_bytes_recv_total"] = nio.bytes_recv
+                data["net_bytes_sent_total"] = nio.bytes_sent
+                data["net_drop_in_total"] = nio.dropin
+                data["net_drop_out_total"] = nio.dropout
+                data["net_err_in_total"] = nio.errin
+                data["net_err_out_total"] = nio.errout
+
         except Exception as e:
             logging.debug(f"psutil error: {e}")
 
@@ -582,17 +696,13 @@ def collect_system_resources():
 
 
 # ==============================================================================
-# 5. GIÁM SÁT MẠNG, PORT & ĐỘ TRỄ LATENCY DIALS
+# 5. NETWORK METRICS, TOPOLOGY, PORTS, CONNECTIONS & INVENTORY
 # ==============================================================================
 
-def ping_target_windows(target):
-    """
-    Đo ping trên Windows: Gửi 2 gói tin (-n 2), timeout 2000ms (-w 2000), ép IPv4 (-4).
-    Lấy giá trị RTT nhỏ nhất trong các gói thành công để tránh jitter.
-    """
-    if not target:
+def ping_target_windows(target_host):
+    if not target_host:
         return None
-    hosts = [target] if isinstance(target, str) else list(target)
+    hosts = [target_host] if isinstance(target_host, str) else list(target_host)
     for h in hosts:
         try:
             out = subprocess.run(
@@ -602,76 +712,63 @@ def ping_target_windows(target):
                 timeout=6,
             )
             if out.returncode == 0 and out.stdout:
-                # Regex bắt chuỗi time=XXms hoặc Minimum = XXms
                 matches = re.findall(r"time[<=]([0-9.]+)\s*ms", out.stdout, re.IGNORECASE)
                 if not matches:
                     matches = re.findall(r"Minimum\s*=\s*([0-9.]+)\s*ms", out.stdout, re.IGNORECASE)
                 if matches:
-                    return round(min(float(m) for m in matches), 3)
+                    return min(float(m) for m in matches)
         except Exception:
             pass
     return None
 
 
 def get_default_gateway_and_dns_windows():
-    """Lấy IP Gateway và DNS từ Windows qua ipconfig hoặc Get-NetRoute."""
     gw = None
-    dns = []
+    dns_list = []
     try:
-        out = subprocess.run(["ipconfig", "/all"], capture_output=True, text=True, timeout=5)
+        out = subprocess.run(["ipconfig", "/all"], capture_output=True, text=True, timeout=4)
         if out.returncode == 0:
-            lines = out.stdout.splitlines()
-            for line in lines:
+            for line in out.stdout.splitlines():
+                line = line.strip()
                 if "Default Gateway" in line or "Cổng mặc định" in line:
-                    m = re.search(r":\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", line)
-                    if m and not gw:
+                    m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", line)
+                    if m and m.group(1) != "0.0.0.0" and not gw:
                         gw = m.group(1)
                 elif "DNS Servers" in line or "Máy chủ DNS" in line:
-                    m = re.search(r":\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", line)
-                    if m:
-                        dns.append(m.group(1))
+                    m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", line)
+                    if m and m.group(1) not in dns_list:
+                        dns_list.append(m.group(1))
     except Exception:
         pass
-    return gw, dns
+    return gw, dns_list
 
 
 def collect_listening_ports_windows():
-    """
-    Trích xuất danh sách cổng đang lắng nghe và map với tên tiến trình Windows
-    (Ví dụ: 3000 -> grafana.exe, 9090 -> prometheus.exe, 22 -> sshd.exe, discord.exe...).
-    """
     ports = []
-    if not psutil:
-        return ports
-
     try:
-        connections = psutil.net_connections(kind="inet")
+        conns = psutil.net_connections(kind="inet") if psutil else []
         seen = set()
-        for c in connections:
-            if c.status == psutil.CONN_LISTEN:
-                ip, port = c.laddr.ip, c.laddr.port
-                key = (c.type, port)
+        for c in conns:
+            if c.status == "LISTEN" or (c.type == socket.SOCK_DGRAM and c.laddr):
+                p_num = c.laddr.port
+                p_ip = c.laddr.ip
+                proto = "tcp" if c.type == socket.SOCK_STREAM else "udp"
+                key = (p_num, proto)
                 if key in seen:
                     continue
                 seen.add(key)
 
-                proto = "tcp" if c.type == socket.SOCK_STREAM else "udp"
-                proc_name = "-"
-                if c.pid:
-                    try:
-                        p = psutil.Process(c.pid)
-                        proc_name = p.name()
-                    except Exception:
-                        proc_name = f"PID:{c.pid}"
+                proc_name = "unknown"
+                try:
+                    if c.pid:
+                        proc = psutil.Process(c.pid)
+                        proc_name = proc.name()
+                except Exception:
+                    pass
 
-                exposure = "Public / LAN"
-                if ip in ["127.0.0.1", "::1"] or ip.startswith("127."):
-                    exposure = "Localhost Only"
-                elif ip.startswith("100."):
-                    exposure = "Tailscale Only"
-
+                exposure = "Localhost" if p_ip.startswith("127.") or p_ip == "::1" else "Public / LAN"
                 ports.append({
-                    "port": str(port),
+                    "port": str(p_num),
                     "proto": proto,
                     "process": proc_name,
                     "exposure": exposure,
@@ -681,67 +778,201 @@ def collect_listening_ports_windows():
     return ports
 
 
+def collect_tcp_states_and_active():
+    states = {}
+    active_conns = []
+    try:
+        conns = psutil.net_connections(kind="inet") if psutil else []
+        for c in conns:
+            st = c.status or "UNKNOWN"
+            states[st] = states.get(st, 0) + 1
+            if c.status == "ESTABLISHED" and c.raddr:
+                proc_name = "-"
+                try:
+                    if c.pid:
+                        p = psutil.Process(c.pid)
+                        proc_name = p.name()
+                except Exception:
+                    pass
+                local_str = f"{c.laddr.ip}:{c.laddr.port}"
+                remote_str = f"{c.raddr.ip}:{c.raddr.port}"
+                active_conns.append({
+                    "local": local_str,
+                    "remote": remote_str,
+                    "process": proc_name,
+                    "proto": "tcp"
+                })
+    except Exception:
+        pass
+    return states, active_conns[:25]
+
+
+def collect_network_interfaces():
+    interfaces = []
+    try:
+        if psutil:
+            addrs = psutil.net_if_addrs()
+            stats = psutil.net_if_stats()
+            for iface_name, addr_list in addrs.items():
+                ipv4 = ""
+                mac = ""
+                for a in addr_list:
+                    if a.family == socket.AF_INET:
+                        ipv4 = a.address
+                    elif hasattr(psutil, "AF_LINK") and a.family == psutil.AF_LINK:
+                        mac = a.address
+                if not ipv4 and not mac:
+                    continue
+                st = stats.get(iface_name)
+                is_up = "up" if st and st.isup else "down"
+                speed = str(st.speed) if st and st.speed > 0 else "auto"
+                net_type = "Wireless" if "wi-fi" in iface_name.lower() or "wlan" in iface_name.lower() else (
+                    "Tailscale" if "tailscale" in iface_name.lower() else "Ethernet"
+                )
+                interfaces.append({
+                    "interface": iface_name,
+                    "ip": ipv4 or "-",
+                    "mac": mac or "-",
+                    "status": is_up,
+                    "speed_mbps": speed,
+                    "net_type": net_type
+                })
+    except Exception:
+        pass
+    return interfaces
+
+
+def collect_device_inventory():
+    devices = []
+    try:
+        out = subprocess.run(["arp", "-a"], capture_output=True, text=True, timeout=4)
+        if out.returncode == 0:
+            for line in out.stdout.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 3 and "-" in parts[1]:
+                    ip = parts[0]
+                    mac = parts[1]
+                    typ = parts[2]
+                    if ip.startswith("224.") or ip.startswith("239.") or ip.endswith(".255") or ip == "255.255.255.255":
+                        continue
+                    devices.append({
+                        "hostname": ip,
+                        "ip": ip,
+                        "mac": mac,
+                        "network": "LAN",
+                        "status": "reachable" if typ == "dynamic" else "static",
+                        "os": "unknown",
+                        "latency": "local"
+                    })
+    except Exception:
+        pass
+
+    try:
+        out = subprocess.run(["tailscale", "status", "--json"], capture_output=True, text=True, timeout=4)
+        if out.returncode == 0 and out.stdout.strip():
+            ts_data = json.loads(out.stdout)
+            peers = ts_data.get("Peer", {})
+            for pid, peer in peers.items():
+                host = peer.get("HostName", "unknown")
+                ts_ips = peer.get("TailscaleIPs", [])
+                ip = ts_ips[0] if ts_ips else "-"
+                online = peer.get("Online", False)
+                os_name = peer.get("OS", "unknown")
+                devices.append({
+                    "hostname": host,
+                    "ip": ip,
+                    "mac": "-",
+                    "network": "Tailscale",
+                    "status": "online" if online else "offline",
+                    "os": os_name,
+                    "latency": "mesh"
+                })
+    except Exception:
+        pass
+
+    return devices
+
+
+def collect_windows_firewall_settings():
+    settings = {}
+    try:
+        ps_cmd = [
+            "powershell", "-NoProfile", "-NonInteractive", "-Command",
+            "(Get-NetFirewallProfile | Select-Object Name, Enabled) | ConvertTo-Json -Compress"
+        ]
+        out = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=4)
+        if out.returncode == 0 and out.stdout.strip():
+            raw = out.stdout.strip()
+            items = [json.loads(raw)] if raw.startswith("{") else json.loads(raw)
+            for it in items:
+                name = it.get("Name", "").lower()
+                enabled = 1 if it.get("Enabled") is True else 0
+                settings[f"firewall_profile_{name}"] = enabled
+    except Exception:
+        pass
+    return settings
+
+
 def get_public_ip_and_isp():
-    """Lấy IP Public và ISP thông qua API ngoài."""
-    pub_ip = "None"
+    ipv4 = "None"
     isp = "unknown"
-    endpoints = [
-        "https://ifconfig.co/json",
-        "http://ip-api.com/json",
-        "https://ipinfo.io/json",
-    ]
-    for url in endpoints:
-        try:
-            # Dùng curl native trên Windows
-            out = subprocess.run(["curl", "-s", "--max-time", "3", url], capture_output=True, text=True, timeout=4)
-            if out.returncode == 0 and out.stdout.strip().startswith("{"):
-                d = json.loads(out.stdout.strip())
-                pub_ip = d.get("ip") or d.get("query") or pub_ip
-                cand_isp = d.get("isp") or d.get("asn_org") or d.get("org") or ""
-                if cand_isp and cand_isp.lower() != "unknown":
-                    isp = cand_isp.strip()
-                    break
-        except Exception:
-            pass
-    return pub_ip, isp
+    try:
+        out = subprocess.run(["curl.exe", "-s", "--max-time", "4", "https://ipinfo.io/json"],
+                             capture_output=True, text=True, timeout=5)
+        if out.returncode == 0 and out.stdout.strip():
+            data = json.loads(out.stdout)
+            ipv4 = data.get("ip", "None")
+            org = data.get("org", "unknown")
+            isp = re.sub(r"^AS\d+\s*", "", org)
+    except Exception:
+        pass
+    return ipv4, isp
+
+
+def detect_cgnat(pub_ip):
+    if not pub_ip or pub_ip == "None":
+        return 0, 0
+    try:
+        ip_obj = ipaddress.ip_address(pub_ip)
+        cgnat_net = ipaddress.ip_network("100.64.0.0/10")
+        is_cgnat = 1 if ip_obj in cgnat_net else 0
+        is_private = 1 if ip_obj.is_private else 0
+        return is_cgnat, is_private
+    except Exception:
+        return 0, 0
 
 
 # ==============================================================================
-# 6. ĐÓNG GÓI CHUẨN PROMETHEUS TEXT EXPOSITION
+# 6. PROMETHEUS EXPOSITION GENERATOR
 # ==============================================================================
 
 def escape_label_value(val):
     if val is None:
         return ""
-    # In Prometheus exposition format, \, ", and \n must be escaped
     return str(val).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
-def add_sample(lines, name, val, labels=None):
-    if val is None:
+def add_sample(lines, name, value, labels=None):
+    if value is None:
         return
     if labels:
-        label_str = ",".join(f'{k}="{escape_label_value(v)}"' for k, v in sorted(labels.items()))
-        lines.append(f"{name}{{{label_str}}} {val}")
+        lbl_str = ",".join(f'{k}="{escape_label_value(v)}"' for k, v in sorted(labels.items()))
+        lines.append(f"{name}{{{lbl_str}}} {value}")
     else:
-        lines.append(f"{name} {val}")
+        lines.append(f"{name} {value}")
 
 
 def generate_prometheus_metrics():
-    """Tổng hợp toàn bộ chỉ số thành nội dung text chuẩn Prometheus."""
     lines = []
-    lines.append("# HELP windows_agent_build_info Thong tin phien ban Windows Unified Agent")
-    lines.append("# TYPE windows_agent_build_info gauge")
-    lines.append('windows_agent_build_info{os="windows",arch="amd64",version="1.0.0"} 1')
+    lines.append("# Windows Unified Monitoring Agent & Blackbox Flight Recorder")
 
-    # 1. Hộp đen Crash Diagnostics (Kernel-Power Event ID 41)
-    lines.append("# HELP windows_last_reboot_unexpected Trang thai khoi dong bat thuong (1: Crash/Power loss, 0: Clean boot)")
-    lines.append("# TYPE windows_last_reboot_unexpected gauge")
-    add_sample(lines, "windows_last_reboot_unexpected", slow_cache.get("last_reboot_unexpected", 0))
-
-    lines.append("# HELP windows_whea_errors_total Tong so loi phan cung WHEA ghi nhan trong 24h")
-    lines.append("# TYPE windows_whea_errors_total gauge")
-    add_sample(lines, "windows_whea_errors_total", slow_cache.get("whea_count", 0))
+    # 1. Crash Diagnostics
+    unexp = slow_cache.get("last_reboot_unexpected", 0)
+    add_sample(lines, "windows_last_reboot_unexpected", unexp)
+    add_sample(lines, "windows_unexpected_boot_flag", unexp)
+    whea_c = slow_cache.get("whea_count", 0)
+    add_sample(lines, "windows_whea_errors_total", whea_c)
+    add_sample(lines, "windows_whea_errors_24h_total", whea_c)
 
     last_crash = slow_cache.get("last_crash_info", {})
     if last_crash:
@@ -771,36 +1002,70 @@ def generate_prometheus_metrics():
             }
         )
 
-    # 2. NVIDIA GPU Metrics (Nhiệt độ, Hotspot, Watts, Fan)
+    # 2. NVIDIA GPU Metrics
     gpus = collect_nvidia_gpu_metrics()
     for g in gpus:
-        idx = g["index"]
-        lbl = {"gpu_index": idx, "gpu_name": g["name"]}
-
+        lbl = {"gpu": g["index"], "name": g["name"]}
+        add_sample(lines, "nvidia_gpu_temp_celsius", g.get("temp_core"), lbl)
         add_sample(lines, "gpu_temperature_celsius", g.get("temp_core"), lbl)
+        add_sample(lines, "nvidia_gpu_hotspot_temp_celsius", g.get("temp_hotspot"), lbl)
         add_sample(lines, "gpu_hotspot_temperature_celsius", g.get("temp_hotspot"), lbl)
+        add_sample(lines, "nvidia_gpu_vram_temp_celsius", g.get("temp_mem"), lbl)
         add_sample(lines, "gpu_memory_temperature_celsius", g.get("temp_mem"), lbl)
+        add_sample(lines, "nvidia_gpu_hotspot_delta_celsius", g.get("hotspot_delta"), lbl)
         add_sample(lines, "gpu_hotspot_delta_celsius", g.get("hotspot_delta"), lbl)
+        add_sample(lines, "nvidia_gpu_power_watts", g.get("power_w"), lbl)
         add_sample(lines, "gpu_power_draw_watts", g.get("power_w"), lbl)
+        add_sample(lines, "nvidia_gpu_power_limit_watts", g.get("power_limit_w"), lbl)
         add_sample(lines, "gpu_power_limit_watts", g.get("power_limit_w"), lbl)
+        add_sample(lines, "nvidia_gpu_fan_speed_percent", g.get("fan_pct"), lbl)
         add_sample(lines, "gpu_fan_speed_percent", g.get("fan_pct"), lbl)
-        add_sample(lines, "gpu_utilization_percent", g.get("util_gpu"), lbl)
-        add_sample(lines, "gpu_memory_used_bytes", g.get("mem_used"), lbl)
-        add_sample(lines, "gpu_memory_total_bytes", g.get("mem_total"), lbl)
-        add_sample(lines, "gpu_clock_graphics_mhz", g.get("clock_core"), lbl)
-        add_sample(lines, "gpu_clock_memory_mhz", g.get("clock_mem"), lbl)
+        add_sample(lines, "nvidia_gpu_utilization_percent", g.get("util_gpu"), lbl)
+        add_sample(lines, "nvidia_gpu_memory_used_bytes", g.get("mem_used"), lbl)
+        add_sample(lines, "nvidia_gpu_memory_total_bytes", g.get("mem_total"), lbl)
+        add_sample(lines, "nvidia_gpu_clock_graphics_mhz", g.get("clock_core"), lbl)
+        add_sample(lines, "nvidia_gpu_clock_memory_mhz", g.get("clock_mem"), lbl)
 
-    # 3. Bo mạch chủ, Đường điện áp 12V/5V/3.3V và CPU Package Power
+        # Standard thermal_temperature_celsius
+        add_sample(lines, "thermal_temperature_celsius", g.get("temp_core"), {"component": "gpu", "sensor": "core"})
+        if g.get("temp_hotspot"):
+            add_sample(lines, "thermal_temperature_celsius", g.get("temp_hotspot"), {"component": "gpu", "sensor": "hotspot"})
+        if g.get("temp_mem"):
+            add_sample(lines, "thermal_temperature_celsius", g.get("temp_mem"), {"component": "gpu", "sensor": "vram"})
+        if g.get("fan_pct"):
+            add_sample(lines, "thermal_fan_speed_percent", g.get("fan_pct"), {"component": "fan", "sensor": "gpu"})
+        if g.get("power_w"):
+            add_sample(lines, "thermal_gpu_power_watts", g.get("power_w"))
+
+    # 3. PSU Voltages, CPU Power & Physical Disks
     hw = collect_motherboard_and_cpu_power()
-    add_sample(lines, "motherboard_voltage_volts", hw.get("v12"), {"rail": "12v"})
-    add_sample(lines, "motherboard_voltage_volts", hw.get("v5"), {"rail": "5v"})
-    add_sample(lines, "motherboard_voltage_volts", hw.get("v33"), {"rail": "3.3v"})
-    add_sample(lines, "cpu_package_power_watts", hw.get("cpu_power_w"))
-    add_sample(lines, "cpu_package_temperature_celsius", hw.get("cpu_temp_package"))
+    if hw.get("v12") is not None:
+        add_sample(lines, "motherboard_voltage_12v", hw["v12"])
+        add_sample(lines, "motherboard_voltage_volts", hw["v12"], {"rail": "12v"})
+    if hw.get("v5") is not None:
+        add_sample(lines, "motherboard_voltage_5v", hw["v5"])
+        add_sample(lines, "motherboard_voltage_volts", hw["v5"], {"rail": "5v"})
+    if hw.get("v33") is not None:
+        add_sample(lines, "motherboard_voltage_3v3", hw["v33"])
+        add_sample(lines, "motherboard_voltage_volts", hw["v33"], {"rail": "3.3v"})
+    if hw.get("cpu_power_w") is not None:
+        add_sample(lines, "cpu_package_power_watts", hw["cpu_power_w"])
+    if hw.get("cpu_temp_package") is not None:
+        add_sample(lines, "cpu_package_temp_celsius", hw["cpu_temp_package"])
+        add_sample(lines, "cpu_package_temperature_celsius", hw["cpu_temp_package"])
+        add_sample(lines, "thermal_temperature_celsius", hw["cpu_temp_package"], {"component": "cpu", "sensor": "package"})
+
     for nv_name, nv_temp in hw.get("nvme_temps", {}).items():
         add_sample(lines, "nvme_temperature_celsius", nv_temp, {"disk": nv_name})
+        add_sample(lines, "thermal_temperature_celsius", nv_temp, {"component": "nvme", "sensor": nv_name})
 
-    # 4. Tài nguyên hệ thống (psutil)
+    for d in slow_cache.get("disk_temperatures", []):
+        add_sample(lines, "system_disk_temperature_celsius", d["temp"], {"disk": d["name"], "media": d["media"], "bus": d["bus"]})
+        add_sample(lines, "nvme_temperature_celsius", d["temp"], {"disk": d["name"]})
+        c_type = "nvme" if "nvme" in d["bus"].lower() or "nvme" in d["name"].lower() else "disk"
+        add_sample(lines, "thermal_temperature_celsius", d["temp"], {"component": c_type, "sensor": d["name"]})
+
+    # 4. System Resources (CPU, RAM, Pagefile, Disks, IO)
     sys_res = collect_system_resources()
     add_sample(lines, "system_cpu_utilization_percent", sys_res.get("cpu_percent_total"))
     for c_idx, c_pct in enumerate(sys_res.get("cpu_percent_cores", [])):
@@ -814,6 +1079,20 @@ def generate_prometheus_metrics():
     add_sample(lines, "system_pagefile_utilization_percent", sys_res.get("pagefile_pct"))
     add_sample(lines, "system_uptime_seconds", sys_res.get("uptime_sec"))
 
+    # Disk IO
+    add_sample(lines, "system_disk_read_bytes_total", sys_res.get("disk_read_bytes_total"))
+    add_sample(lines, "system_disk_written_bytes_total", sys_res.get("disk_written_bytes_total"))
+    add_sample(lines, "system_disk_reads_completed_total", sys_res.get("disk_reads_completed_total"))
+    add_sample(lines, "system_disk_writes_completed_total", sys_res.get("disk_writes_completed_total"))
+
+    # Network IO
+    add_sample(lines, "system_network_receive_bytes_total", sys_res.get("net_bytes_recv_total"))
+    add_sample(lines, "system_network_transmit_bytes_total", sys_res.get("net_bytes_sent_total"))
+    add_sample(lines, "system_network_receive_drop_total", sys_res.get("net_drop_in_total"))
+    add_sample(lines, "system_network_transmit_drop_total", sys_res.get("net_drop_out_total"))
+    add_sample(lines, "system_network_receive_errs_total", sys_res.get("net_err_in_total"))
+    add_sample(lines, "system_network_transmit_errs_total", sys_res.get("net_err_out_total"))
+
     for d in sys_res.get("disks", []):
         mount_clean = d["mountpoint"].rstrip("\\") if d["mountpoint"] else d["mountpoint"]
         d_lbl = {"drive": mount_clean, "fstype": d["fstype"]}
@@ -821,7 +1100,7 @@ def generate_prometheus_metrics():
         add_sample(lines, "system_disk_total_bytes", d["total"], d_lbl)
         add_sample(lines, "system_disk_utilization_percent", d["percent"], d_lbl)
 
-    # 5. Mạng, Cổng dịch vụ và Latency Dials đa điểm
+    # 5. Network & Security Topology
     add_sample(
         lines,
         "net_wan_info",
@@ -833,6 +1112,53 @@ def generate_prometheus_metrics():
         }
     )
 
+    add_sample(lines, "net_nat_is_cgnat", slow_cache.get("cgnat", 0))
+    add_sample(lines, "net_nat_is_double_nat", slow_cache.get("double_nat", 0))
+    add_sample(lines, "net_tailscale_status", 1 if slow_cache.get("tailscale_online", 0) else 0)
+    if slow_cache.get("gateway_ip"):
+        add_sample(lines, "net_gateway_info", 1, {"gateway": slow_cache["gateway_ip"]})
+
+    # TCP States
+    tcp_states, active_conns = collect_tcp_states_and_active()
+    for st_name, count in tcp_states.items():
+        add_sample(lines, "system_tcp_connections", count, {"state": st_name})
+
+    for conn in active_conns:
+        add_sample(lines, "net_active_connection_info", 1, {
+            "local_addr": conn["local"],
+            "remote_addr": conn["remote"],
+            "process": conn["process"],
+            "proto": conn["proto"],
+        })
+
+    # Interfaces
+    for iface in collect_network_interfaces():
+        add_sample(lines, "net_interface_info", 1, {
+            "interface": iface["interface"],
+            "ip": iface["ip"],
+            "mac": iface["mac"],
+            "status": iface["status"],
+            "speed_mbps": iface["speed_mbps"],
+            "net_type": iface["net_type"],
+        })
+
+    # Device Inventory
+    for dev in slow_cache.get("device_inventory", []):
+        add_sample(lines, "net_device_info", 1, {
+            "hostname": dev["hostname"],
+            "ip": dev["ip"],
+            "mac": dev["mac"],
+            "network": dev["network"],
+            "status": dev["status"],
+            "os": dev["os"],
+            "latency": dev["latency"],
+        })
+
+    # Firewall settings
+    for s_name, s_val in slow_cache.get("firewall_settings", {}).items():
+        add_sample(lines, "net_security_setting", s_val, {"setting": s_name})
+
+    # Listening Ports
     for p in collect_listening_ports_windows():
         add_sample(
             lines,
@@ -846,6 +1172,7 @@ def generate_prometheus_metrics():
             }
         )
 
+    # Latency Dials
     for tid, tinfo in slow_cache.get("latencies", {}).items():
         if tinfo.get("val") is not None:
             add_sample(
@@ -863,11 +1190,10 @@ def generate_prometheus_metrics():
 
 
 # ==============================================================================
-# 7. VÒNG LẶP THU THẬP NỀN (BACKGROUND WORKER THREAD)
+# 7. BACKGROUND COLLECTOR LOOP
 # ==============================================================================
 
 def background_collector_loop():
-    """Worker runs in background: fast poll thermals/watts/voltages every 5s, slow poll EventLog/Ping every 60s."""
     global metrics_output_text
     logging.info(f"Starting Background Collector Loop (Fast: {FAST_INTERVAL}s, Slow: {SLOW_INTERVAL}s)")
 
@@ -875,24 +1201,40 @@ def background_collector_loop():
         try:
             now = time.time()
 
-            # Quá trình chậm: EventLog khám nghiệm sập nguồn & Đo ping dials
             if now - slow_cache["last_run"] >= SLOW_INTERVAL or slow_cache["last_run"] == 0:
                 slow_cache["last_run"] = now
 
-                # 1. Khám nghiệm Event Log
+                # 1. Event Log
                 crashes, last_c, is_unexp, whea_c = query_windows_crash_events()
                 slow_cache["crashes"] = crashes
                 slow_cache["last_crash_info"] = last_c
                 slow_cache["last_reboot_unexpected"] = is_unexp
                 slow_cache["whea_count"] = whea_c
 
-                # 2. Lấy Public IP & ISP
+                # 2. Public IP & ISP & CGNAT
                 pub_ip, isp_name = get_public_ip_and_isp()
                 slow_cache["public_ipv4"] = pub_ip
                 slow_cache["isp"] = isp_name
+                is_cg, is_priv = detect_cgnat(pub_ip)
+                slow_cache["cgnat"] = is_cg
+                slow_cache["double_nat"] = is_priv
 
-                # 3. Đo Latency Dials đa điểm (có cơ chế giữ cache chống nhấp nháy mất dial)
+                # 3. Gateway & DNS
                 gw_ip, dns_ips = get_default_gateway_and_dns_windows()
+                slow_cache["gateway_ip"] = gw_ip or ""
+                slow_cache["dns_servers"] = dns_ips
+
+                # 4. Physical Disks (NVMe / SSD)
+                slow_cache["disk_temperatures"] = collect_windows_disk_temperatures()
+
+                # 5. Device Inventory (LAN + Tailscale)
+                slow_cache["device_inventory"] = collect_device_inventory()
+                slow_cache["tailscale_online"] = 1 if any(d["network"] == "Tailscale" for d in slow_cache["device_inventory"]) else 0
+
+                # 6. Firewall settings
+                slow_cache["firewall_settings"] = collect_windows_firewall_settings()
+
+                # 7. Ping Latency Dials
                 prev_lat = slow_cache.get("latencies", {})
                 fail_counts = slow_cache.get("latency_fail_counts", {})
                 new_latencies = {}
@@ -929,7 +1271,6 @@ def background_collector_loop():
                 slow_cache["latency_fail_counts"] = fail_counts
                 slow_cache["latencies"] = new_latencies
 
-            # Tạo text metrics hoàn chỉnh và cập nhật vào biến chia sẻ
             text = generate_prometheus_metrics()
             with state_lock:
                 metrics_output_text = text
@@ -941,7 +1282,7 @@ def background_collector_loop():
 
 
 # ==============================================================================
-# 8. HTTP SERVER ĐỘC LẬP XUẤT PROMETHEUS ENDPOINT (:9100/metrics)
+# 8. HTTP SERVER (:9100/metrics)
 # ==============================================================================
 
 class MetricsHandler(BaseHTTPRequestHandler):
@@ -966,27 +1307,24 @@ class MetricsHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        # Tắt log access thông thường để tránh rác console/file log
         pass
 
 
 def run_agent_server():
-    # 1. Khởi chạy worker thread
     t = threading.Thread(target=background_collector_loop, daemon=True)
     t.start()
 
-    # 2. Khởi chạy HTTP Server trên port 9100
-    server_addr = (BIND_IP, METRICS_PORT)
-    httpd = HTTPServer(server_addr, MetricsHandler)
-    logging.info(f"Windows Monitoring Agent listening at http://{BIND_IP}:{METRICS_PORT}/metrics")
+    server_address = (BIND_IP, METRICS_PORT)
+    httpd = HTTPServer(server_address, MetricsHandler)
+    logging.info(f"Windows Unified Monitoring Agent started on http://{BIND_IP}:{METRICS_PORT}/metrics")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        logging.info("Stopping Agent on request.")
+        pass
     finally:
         httpd.server_close()
+        logging.info("Agent HTTP server stopped.")
 
 
 if __name__ == "__main__":
     run_agent_server()
-

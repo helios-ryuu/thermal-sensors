@@ -6,7 +6,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BaseDir = Split-Path -Parent $ScriptDir
 $NssmExe = Join-Path $BaseDir "bin\nssm\win64\nssm.exe"
 
-$Services = @("WindowsGrafana", "WindowsPrometheus", "WindowsThermalAgent")
+$Services = @("WindowsGrafana", "WindowsPrometheus", "WindowsThermalAgent", "WindowsLHM")
 
 Write-Host "Stopping and removing monitoring services..." -ForegroundColor Yellow
 

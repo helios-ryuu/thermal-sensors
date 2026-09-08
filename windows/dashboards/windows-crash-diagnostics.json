@@ -30,7 +30,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "Hộp đen Chẩn đoán Sập nguồn (Post-Mortem Status Cards)",
+      "title": "H\u1ed9p \u0111en Ch\u1ea9n \u0111o\u00e1n S\u1eadp ngu\u1ed3n (Post-Mortem Status Cards)",
       "type": "row"
     },
     {
@@ -45,11 +45,11 @@
               "options": {
                 "0": {
                   "color": "green",
-                  "text": "CLEAN BOOT (Tắt máy bình thường)"
+                  "text": "CLEAN BOOT (T\u1eaft m\u00e1y b\u00ecnh th\u01b0\u1eddng)"
                 },
                 "1": {
                   "color": "red",
-                  "text": "SẬP NGUỒN ĐỘT NGỘT (Event ID 41)"
+                  "text": "S\u1eacP NGU\u1ed2N \u0110\u1ed8T NG\u1ed8T (Event ID 41)"
                 }
               },
               "type": "value"
@@ -100,7 +100,7 @@
           "refId": "A"
         }
       ],
-      "title": "Trạng thái Khởi động Lần gần nhất",
+      "title": "Tr\u1ea1ng th\u00e1i Kh\u1edfi \u0111\u1ed9ng L\u1ea7n g\u1ea7n nh\u1ea5t",
       "type": "stat"
     },
     {
@@ -155,7 +155,7 @@
           "refId": "A"
         }
       ],
-      "title": "Mã BugCheck / StopCode Gần nhất",
+      "title": "M\u00e3 BugCheck / StopCode G\u1ea7n nh\u1ea5t",
       "type": "stat"
     },
     {
@@ -206,11 +206,11 @@
         {
           "expr": "windows_last_crash_info",
           "instant": true,
-          "legendFormat": "{{bugcheck_desc}} (Vào lúc {{time}})",
+          "legendFormat": "{{bugcheck_desc}} (V\u00e0o l\u00fac {{time}})",
           "refId": "A"
         }
       ],
-      "title": "Nhận diện Nguyên nhân Khả dĩ nhất",
+      "title": "Nh\u1eadn di\u1ec7n Nguy\u00ean nh\u00e2n Kh\u1ea3 d\u0129 nh\u1ea5t",
       "type": "stat"
     },
     {
@@ -268,7 +268,7 @@
           "refId": "A"
         }
       ],
-      "title": "Lỗi Phần cứng WHEA (24h)",
+      "title": "L\u1ed7i Ph\u1ea7n c\u1ee9ng WHEA (24h)",
       "type": "stat"
     },
     {
@@ -280,7 +280,7 @@
         "y": 5
       },
       "id": 200,
-      "title": "Khảo sát Nguồn & Sụt áp Điện áp (PSU Health - Nguyên nhân #1 gây sập tải nặng)",
+      "title": "Kh\u1ea3o s\u00e1t Ngu\u1ed3n & S\u1ee5t \u00e1p \u0110i\u1ec7n \u00e1p (PSU Health - Nguy\u00ean nh\u00e2n #1 g\u00e2y s\u1eadp t\u1ea3i n\u1eb7ng)",
       "type": "row"
     },
     {
@@ -288,7 +288,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Đường điện áp 12V cấp cho GPU và CPU VRM. Chuẩn ATX quy định: 11.40V - 12.60V. Nếu đường 12V rơi xuống dưới 11.40V khi chơi game/render, nguồn PSU bị quá tải tụ gây sập ngay lập tức.",
+      "description": "\u0110\u01b0\u1eddng \u0111i\u1ec7n \u00e1p 12V c\u1ea5p cho GPU v\u00e0 CPU VRM. Chu\u1ea9n ATX quy \u0111\u1ecbnh: 11.40V - 12.60V. N\u1ebfu \u0111\u01b0\u1eddng 12V r\u01a1i xu\u1ed1ng d\u01b0\u1edbi 11.40V khi ch\u01a1i game/render, ngu\u1ed3n PSU b\u1ecb qu\u00e1 t\u1ea3i t\u1ee5 g\u00e2y s\u1eadp ngay l\u1eadp t\u1ee9c.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -355,12 +355,12 @@
       },
       "targets": [
         {
-          "expr": "motherboard_voltage_volts{rail=\"12v\"}",
-          "legendFormat": "Đường 12V (Chuẩn an toàn: 11.4V - 12.6V)",
+          "expr": "motherboard_voltage_volts{rail=\"12v\"} or motherboard_voltage_12v",
+          "legendFormat": "\u0110\u01b0\u1eddng 12V (Chu\u1ea9n an to\u00e0n: 11.4V - 12.6V)",
           "refId": "A"
         }
       ],
-      "title": "Độ ổn định Điện áp Đường 12V (PSU 12V Rail Drop)",
+      "title": "\u0110\u1ed9 \u1ed5n \u0111\u1ecbnh \u0110i\u1ec7n \u00e1p \u0110\u01b0\u1eddng 12V (PSU 12V Rail Drop)",
       "type": "timeseries"
     },
     {
@@ -368,7 +368,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Đường 5V cấp cho cổng USB/SSD và 3.3V cấp cho chipset bo mạch chủ.",
+      "description": "\u0110\u01b0\u1eddng 5V c\u1ea5p cho c\u1ed5ng USB/SSD v\u00e0 3.3V c\u1ea5p cho chipset bo m\u1ea1ch ch\u1ee7.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -404,12 +404,12 @@
       },
       "targets": [
         {
-          "expr": "motherboard_voltage_volts{rail=~\"5v|3.3v\"}",
-          "legendFormat": "Đường {{rail}}",
+          "expr": "motherboard_voltage_volts{rail=~\"5v|3.3v\"} or motherboard_voltage_5v or motherboard_voltage_3v3",
+          "legendFormat": "\u0110\u01b0\u1eddng {{rail}}",
           "refId": "A"
         }
       ],
-      "title": "Điện áp Đường 5V & 3.3V",
+      "title": "\u0110i\u1ec7n \u00e1p \u0110\u01b0\u1eddng 5V & 3.3V",
       "type": "timeseries"
     },
     {
@@ -417,7 +417,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "So sánh công suất tiêu thụ thực tế của GPU và CPU (Watts) so với ngưỡng giới hạn Power Limit. Nếu tổng công suất vượt công suất danh định của nguồn PSU, bộ nguồn sẽ kích hoạt bảo vệ quá dòng (OCP).",
+      "description": "So s\u00e1nh c\u00f4ng su\u1ea5t ti\u00eau th\u1ee5 th\u1ef1c t\u1ebf c\u1ee7a GPU v\u00e0 CPU (Watts) so v\u1edbi ng\u01b0\u1ee1ng gi\u1edbi h\u1ea1n Power Limit. N\u1ebfu t\u1ed5ng c\u00f4ng su\u1ea5t v\u01b0\u1ee3t c\u00f4ng su\u1ea5t danh \u0111\u1ecbnh c\u1ee7a ngu\u1ed3n PSU, b\u1ed9 ngu\u1ed3n s\u1ebd k\u00edch ho\u1ea1t b\u1ea3o v\u1ec7 qu\u00e1 d\u00f2ng (OCP).",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -431,7 +431,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Tổng GPU + CPU Watts"
+              "options": "T\u1ed5ng GPU + CPU Watts"
             },
             "properties": [
               {
@@ -488,11 +488,11 @@
         },
         {
           "expr": "gpu_power_draw_watts + on() cpu_package_power_watts",
-          "legendFormat": "Tổng GPU + CPU Watts",
+          "legendFormat": "T\u1ed5ng GPU + CPU Watts",
           "refId": "D"
         }
       ],
-      "title": "Công suất Tải đỉnh Tức thời (Transient Power Spikes - Watts)",
+      "title": "C\u00f4ng su\u1ea5t T\u1ea3i \u0111\u1ec9nh T\u1ee9c th\u1eddi (Transient Power Spikes - Watts)",
       "type": "timeseries"
     },
     {
@@ -504,7 +504,7 @@
         "y": 22
       },
       "id": 300,
-      "title": "Khảo sát Nhiệt độ Điểm nóng GPU & Ngắt nhiệt CPU (Thermal Trip)",
+      "title": "Kh\u1ea3o s\u00e1t Nhi\u1ec7t \u0111\u1ed9 \u0110i\u1ec3m n\u00f3ng GPU & Ng\u1eaft nhi\u1ec7t CPU (Thermal Trip)",
       "type": "row"
     },
     {
@@ -512,7 +512,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Nhiệt độ Core, Hotspot và VRAM của GPU NVIDIA. Ngưỡng ngắt bảo vệ của Hotspot thường là 105°C - 110°C.",
+      "description": "Nhi\u1ec7t \u0111\u1ed9 Core, Hotspot v\u00e0 VRAM c\u1ee7a GPU NVIDIA. Ng\u01b0\u1ee1ng ng\u1eaft b\u1ea3o v\u1ec7 c\u1ee7a Hotspot th\u01b0\u1eddng l\u00e0 105\u00b0C - 110\u00b0C.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -606,7 +606,7 @@
           "refId": "C"
         }
       ],
-      "title": "Nhiệt độ GPU (Core vs Hotspot vs VRAM)",
+      "title": "Nhi\u1ec7t \u0111\u1ed9 GPU (Core vs Hotspot vs VRAM)",
       "type": "timeseries"
     },
     {
@@ -614,7 +614,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Độ chênh lệch Delta = Hotspot - Core. Bình thường dao động 10 - 15°C. Nếu Delta > 25°C - 30°C, keo tản nhiệt GPU bị khô/bơm ra ngoài, nhiệt độ không thoát được gây sập máy.",
+      "description": "\u0110\u1ed9 ch\u00eanh l\u1ec7ch Delta = Hotspot - Core. B\u00ecnh th\u01b0\u1eddng dao \u0111\u1ed9ng 10 - 15\u00b0C. N\u1ebfu Delta > 25\u00b0C - 30\u00b0C, keo t\u1ea3n nhi\u1ec7t GPU b\u1ecb kh\u00f4/b\u01a1m ra ngo\u00e0i, nhi\u1ec7t \u0111\u1ed9 kh\u00f4ng tho\u00e1t \u0111\u01b0\u1ee3c g\u00e2y s\u1eadp m\u00e1y.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -670,11 +670,11 @@
       "targets": [
         {
           "expr": "gpu_hotspot_delta_celsius",
-          "legendFormat": "Delta Hotspot - Core (°C)",
+          "legendFormat": "Delta Hotspot - Core (\u00b0C)",
           "refId": "A"
         }
       ],
-      "title": "Chênh lệch Điểm nóng GPU Delta (Cảnh báo khô keo tản nhiệt)",
+      "title": "Ch\u00eanh l\u1ec7ch \u0110i\u1ec3m n\u00f3ng GPU Delta (C\u1ea3nh b\u00e1o kh\u00f4 keo t\u1ea3n nhi\u1ec7t)",
       "type": "timeseries"
     },
     {
@@ -682,7 +682,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Nhiệt độ CPU Package so với ngưỡng ngắt bảo vệ phần cứng TjMax (thường là 100°C - 105°C) và nhiệt độ ổ cứng NVMe.",
+      "description": "Nhi\u1ec7t \u0111\u1ed9 CPU Package so v\u1edbi ng\u01b0\u1ee1ng ng\u1eaft b\u1ea3o v\u1ec7 ph\u1ea7n c\u1ee9ng TjMax (th\u01b0\u1eddng l\u00e0 100\u00b0C - 105\u00b0C) v\u00e0 nhi\u1ec7t \u0111\u1ed9 \u1ed5 c\u1ee9ng NVMe.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -734,7 +734,7 @@
       },
       "targets": [
         {
-          "expr": "cpu_package_temperature_celsius",
+          "expr": "cpu_package_temperature_celsius or cpu_package_temp_celsius",
           "legendFormat": "CPU Package Temp",
           "refId": "A"
         },
@@ -744,7 +744,7 @@
           "refId": "B"
         }
       ],
-      "title": "Nhiệt độ CPU Package & Ổ cứng NVMe",
+      "title": "Nhi\u1ec7t \u0111\u1ed9 CPU Package & \u1ed4 c\u1ee9ng NVMe",
       "type": "timeseries"
     },
     {
@@ -756,7 +756,7 @@
         "y": 39
       },
       "id": 400,
-      "title": "Bảng Lịch sử Khám nghiệm Sự kiện Sập nguồn (Event ID 41 Table)",
+      "title": "B\u1ea3ng L\u1ecbch s\u1eed Kh\u00e1m nghi\u1ec7m S\u1ef1 ki\u1ec7n S\u1eadp ngu\u1ed3n (Event ID 41 Table)",
       "type": "row"
     },
     {
@@ -764,7 +764,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Bảng ghi nhận toàn bộ các lần Windows bị ngắt nguồn bất ngờ trích xuất từ Microsoft-Windows-Kernel-Power Event Log.",
+      "description": "B\u1ea3ng ghi nh\u1eadn to\u00e0n b\u1ed9 c\u00e1c l\u1ea7n Windows b\u1ecb ng\u1eaft ngu\u1ed3n b\u1ea5t ng\u1edd tr\u00edch xu\u1ea5t t\u1eeb Microsoft-Windows-Kernel-Power Event Log.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -801,7 +801,7 @@
           "refId": "A"
         }
       ],
-      "title": "Chi tiết Nhật ký Lỗi Tắt nguồn Bất thường (Kernel-Power Event 41)",
+      "title": "Chi ti\u1ebft Nh\u1eadt k\u00fd L\u1ed7i T\u1eaft ngu\u1ed3n B\u1ea5t th\u01b0\u1eddng (Kernel-Power Event 41)",
       "type": "table"
     }
   ],
@@ -832,4 +832,3 @@
   "uid": "windows-crash-diagnostics",
   "version": 1
 }
-

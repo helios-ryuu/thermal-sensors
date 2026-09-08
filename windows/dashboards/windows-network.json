@@ -1,35 +1,350 @@
 {
-  "annotations": {
-    "list": []
-  },
-  "editable": true,
-  "fiscalYearStartMonth": 0,
+  "editable": false,
   "graphTooltip": 1,
-  "id": null,
-  "links": [],
-  "liveNow": false,
+  "links": [
+    {
+      "title": "iMac Thermal Sensors",
+      "type": "dashboard",
+      "url": "/d/imac-thermal"
+    },
+    {
+      "title": "System Resources",
+      "type": "dashboard",
+      "url": "/d/system-resources"
+    },
+    {
+      "title": "System Health",
+      "type": "dashboard",
+      "url": "/d/system-health"
+    }
+  ],
   "panels": [
     {
-      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Carrier-Grade NAT (CGNAT) detection. Green = Direct Public IP, Yellow = Behind ISP CGNAT (100.64.0.0/10).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "Public Direct (No CGNAT)"
+                },
+                "1": {
+                  "color": "yellow",
+                  "text": "Behind CGNAT (100.64.0.0/10)"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
       "gridPos": {
-        "h": 1,
-        "w": 24,
+        "h": 4,
+        "w": 4,
         "x": 0,
         "y": 0
       },
-      "id": 100,
-      "title": "Thông tin Mạng Internet & Nhà mạng (WAN / ISP)",
-      "type": "row"
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "net_nat_is_cgnat",
+          "instant": true,
+          "legendFormat": "CGNAT",
+          "refId": "A"
+        }
+      ],
+      "title": "CGNAT Status",
+      "type": "stat"
     },
     {
       "datasource": {
         "type": "prometheus",
         "uid": "Prometheus"
       },
+      "description": "NAT Traversal Behavior. Green = Cone NAT (Direct P2P Friendly), Yellow = Symmetric NAT (Relay Required).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "Cone NAT (P2P Friendly)"
+                },
+                "1": {
+                  "color": "yellow",
+                  "text": "Symmetric NAT (Relay Required)"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "net_nat_is_symmetric",
+          "instant": true,
+          "legendFormat": "NAT Type",
+          "refId": "A"
+        }
+      ],
+      "title": "NAT Traversal Type",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Double NAT detection via hop traceroute. Green = Single NAT (Optimal), Orange = Multi-layer Router Detected.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "Single NAT (Optimal)"
+                },
+                "1": {
+                  "color": "orange",
+                  "text": "Double NAT Detected"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "net_nat_is_double_nat",
+          "instant": true,
+          "legendFormat": "Double NAT",
+          "refId": "A"
+        }
+      ],
+      "title": "Double NAT Detection",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Tailscale Mesh VPN daemon connection state on iMac.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "Tailscale Offline"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "Tailscale Online"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "net_tailscale_status",
+          "instant": true,
+          "legendFormat": "Tailscale",
+          "refId": "A"
+        }
+      ],
+      "title": "Tailscale Mesh VPN",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Default gateway router IP, hardware MAC address and interface.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "name"
+      },
+      "targets": [
+        {
+          "expr": "net_gateway_info",
+          "instant": true,
+          "legendFormat": "{{gateway_ip}} \u2022 {{gateway_mac}} ({{interface}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Default Gateway Router",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Public IPv4 address and detected Internet Service Provider (ISP). Blue card with large clear font.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
           },
           "thresholds": {
             "mode": "absolute",
@@ -45,16 +360,15 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 10,
         "x": 0,
-        "y": 1
+        "y": 4
       },
-      "id": 1,
+      "id": 6,
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
+        "justifyMode": "center",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -68,11 +382,66 @@
         {
           "expr": "net_wan_info",
           "instant": true,
-          "legendFormat": "{{public_ipv4}} • {{isp}}",
+          "legendFormat": "{{public_ipv4}} \u2022 {{isp}}",
           "refId": "A"
         }
       ],
       "title": "Public IPv4 & ISP",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Public IPv6 Global Unicast Address. Wide 14-grid card to display the full 39-character IPv6 in large legible text.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 14,
+        "x": 10,
+        "y": 4
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "name"
+      },
+      "targets": [
+        {
+          "expr": "net_wan_info",
+          "instant": true,
+          "legendFormat": "{{public_ipv6}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Public IPv6 Address",
       "type": "stat"
     },
     {
@@ -81,10 +450,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 8
       },
-      "id": 200,
-      "title": "Đồng hồ Đo Độ trễ Đa điểm (Latency Dials - Gateway / DNS / Dịch vụ Internet)",
+      "id": 100,
+      "title": "Network Quality & Latency Gauges",
       "type": "row"
     },
     {
@@ -92,11 +461,12 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Đo độ trễ ICMP ping tới Gateway cục bộ, DNS nội bộ và các dịch vụ Internet lớn (Cloudflare, Google, YouTube, Facebook, Discord, AWS Asia, GitHub).",
+      "description": "Real-time ICMP ping latency dials to Gateway, Local DNS, VN DNS, and Global Services (Cloudflare, Google, YouTube, Facebook, Discord, AWS, GitHub).",
       "fieldConfig": {
         "defaults": {
           "max": 200,
           "min": 0,
+          "unit": "ms",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -117,8 +487,7 @@
                 "value": 200
               }
             ]
-          },
-          "unit": "ms"
+          }
         },
         "overrides": [
           {
@@ -191,9 +560,9 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 6
+        "y": 9
       },
-      "id": 2,
+      "id": 8,
       "options": {
         "orientation": "auto",
         "reduceOptions": {
@@ -222,15 +591,17 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Lịch sử độ trễ ICMP Ping tới Gateway, DNS Resolver và các dịch vụ Internet toàn cầu.",
+      "description": "ICMP Ping latency history to Gateway, Local DNS, VN DNS, and Global Services.",
       "fieldConfig": {
         "defaults": {
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 15,
-            "gradientMode": "opacity",
-            "lineWidth": 2
+            "lineWidth": 2,
+            "showPoints": "never",
+            "gradientMode": "opacity"
           },
+          "unit": "ms",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -251,8 +622,7 @@
                 "value": 200
               }
             ]
-          },
-          "unit": "ms"
+          }
         },
         "overrides": [
           {
@@ -291,9 +661,9 @@
         "h": 8,
         "w": 16,
         "x": 8,
-        "y": 6
+        "y": 9
       },
-      "id": 3,
+      "id": 9,
       "options": {
         "legend": {
           "calcs": [
@@ -301,7 +671,8 @@
             "max"
           ],
           "displayMode": "table",
-          "placement": "right"
+          "placement": "right",
+          "showLegend": true
         },
         "tooltip": {
           "mode": "multi",
@@ -315,7 +686,7 @@
           "refId": "A"
         }
       ],
-      "title": "Lịch sử Độ trễ Mạng (Network Latency History)",
+      "title": "Network Latency History",
       "type": "timeseries"
     },
     {
@@ -324,10 +695,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 17
       },
-      "id": 300,
-      "title": "Cổng Dịch vụ Đang Lắng nghe trên Windows (Open Listening Ports)",
+      "id": 101,
+      "title": "Network Topology & Interfaces",
       "type": "row"
     },
     {
@@ -335,54 +706,1645 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Danh sách các cổng TCP/UDP đang mở trên máy Windows kèm tên tiến trình (Process Name).",
+      "description": "Distribution of active network interfaces by type: Physical (enp), Wi-Fi, VPN (Tailscale), Docker bridge, Kubernetes CNI, Virtual veth.",
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "align": "auto"
+            "fillOpacity": 70,
+            "lineWidth": 0
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "physical"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "wifi"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "vpn"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "docker"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "k8s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "virtual"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-gray",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 18
+      },
+      "id": 10,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "expr": "count by (net_type) (net_interface_info)",
+          "instant": true,
+          "legendFormat": "{{net_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Interface Types Distribution",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Host network interfaces with Type, Hardware Speed, Duplex, MAC address, MTU, Status and IP CIDRs.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Type"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "physical": {
+                        "color": "green",
+                        "text": "physical"
+                      },
+                      "wifi": {
+                        "color": "blue",
+                        "text": "wifi"
+                      },
+                      "vpn": {
+                        "color": "purple",
+                        "text": "vpn"
+                      },
+                      "docker": {
+                        "color": "orange",
+                        "text": "docker"
+                      },
+                      "k8s": {
+                        "color": "yellow",
+                        "text": "k8s"
+                      },
+                      "virtual": {
+                        "color": "semi-dark-gray",
+                        "text": "virtual"
+                      },
+                      "other": {
+                        "color": "gray",
+                        "text": "other"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Interface"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "UP": {
+                        "color": "green",
+                        "text": "UP"
+                      },
+                      "DOWN": {
+                        "color": "red",
+                        "text": "DOWN"
+                      },
+                      "UNKNOWN": {
+                        "color": "yellow",
+                        "text": "UNKNOWN"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Speed"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "1000 Mbps": {
+                        "color": "green",
+                        "text": "1000 Mbps (1G)"
+                      },
+                      "100 Mbps": {
+                        "color": "yellow",
+                        "text": "100 Mbps"
+                      },
+                      "N/A": {
+                        "color": "gray",
+                        "text": "Virtual/N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Duplex"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hardware MAC"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MTU"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 18
+      },
+      "id": 11,
+      "options": {
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Type"
+          },
+          {
+            "desc": false,
+            "displayName": "Interface"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "net_interface_info",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Network Interfaces & Subnets",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "name": "Interface",
+              "state": "Status",
+              "mtu": "MTU",
+              "ips": "IP Subnets",
+              "net_type": "Type",
+              "speed": "Speed",
+              "duplex": "Duplex",
+              "mac": "Hardware MAC"
+            },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value": true
+            },
+            "indexByName": {
+              "Type": 0,
+              "Interface": 1,
+              "Status": 2,
+              "Speed": 3,
+              "Duplex": 4,
+              "Hardware MAC": 5,
+              "MTU": 6,
+              "IP Subnets": 7
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 102,
+      "title": "Device Inventory (LAN & Tailscale)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Total active devices discovered across all networks (LAN + Tailscale).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 27
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "count(net_device_info) or vector(0)",
+          "instant": true,
+          "legendFormat": "Total Devices",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Network Devices",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Active devices discovered on the physical local LAN via ARP table.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 27
+      },
+      "id": 17,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "count(net_device_info{network=\"LAN\"}) or vector(0)",
+          "instant": true,
+          "legendFormat": "LAN Devices",
+          "refId": "A"
+        }
+      ],
+      "title": "Local LAN Devices",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Peer nodes connected in the Tailscale private mesh network.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 27
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "count(net_device_info{network=\"Tailscale\"}) or vector(0)",
+          "instant": true,
+          "legendFormat": "Tailscale Nodes",
+          "refId": "A"
+        }
+      ],
+      "title": "Tailscale Mesh Nodes",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Currently active, reachable devices responding on the network.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 27
+      },
+      "id": 19,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "expr": "count(net_device_info{status=~\"reachable|online\"}) or vector(0)",
+          "instant": true,
+          "legendFormat": "Active Online",
+          "refId": "A"
+        }
+      ],
+      "title": "Active / Reachable Online",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Deep device profiling combining ARP neighbors, Tailscale mesh, OUI MAC vendor analysis, DNS resolution, open port fingerprinting (AirPlay, SSH, HTTP, SMB, Cast) and link status.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Network"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 105
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "LAN": {
+                        "color": "green",
+                        "text": "LAN"
+                      },
+                      "Tailscale": {
+                        "color": "blue",
+                        "text": "Tailscale"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 115
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "online": {
+                        "color": "green",
+                        "text": "Online"
+                      },
+                      "reachable": {
+                        "color": "green",
+                        "text": "Reachable"
+                      },
+                      "offline": {
+                        "color": "red",
+                        "text": "Offline"
+                      },
+                      "stale": {
+                        "color": "yellow",
+                        "text": "Stale"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "IP Address"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 145
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Device Name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 210
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Device Profile"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "Router / Gateway": {
+                        "color": "blue",
+                        "text": "Router / Gateway"
+                      },
+                      "Apple Device (AirPlay/iOS)": {
+                        "color": "green",
+                        "text": "Apple Device (AirPlay)"
+                      },
+                      "Apple Device (Mac/iPhone)": {
+                        "color": "green",
+                        "text": "Apple Device"
+                      },
+                      "Smart TV / Cast Device": {
+                        "color": "purple",
+                        "text": "Smart TV / Cast"
+                      },
+                      "File Server / Windows PC": {
+                        "color": "orange",
+                        "text": "File Server / PC"
+                      },
+                      "Linux Server / Host": {
+                        "color": "purple",
+                        "text": "Linux Server"
+                      },
+                      "Mobile Client (Private Wi-Fi)": {
+                        "color": "orange",
+                        "text": "Mobile (Private MAC)"
+                      },
+                      "Smart Home / IoT Device": {
+                        "color": "yellow",
+                        "text": "Smart Home / IoT"
+                      },
+                      "Web Appliance / Server": {
+                        "color": "blue",
+                        "text": "Web Appliance"
+                      }
+                    },
+                    "type": "value"
+                  },
+                  {
+                    "options": {
+                      "pattern": "^Tailscale.*",
+                      "result": {
+                        "color": "purple"
+                      }
+                    },
+                    "type": "regex"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Detected Services"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 175
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "ICMP Only": {
+                        "color": "gray",
+                        "text": "ICMP Ping Only"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hardware Vendor"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "Apple Inc.": {
+                        "color": "green",
+                        "text": "Apple Inc."
+                      },
+                      "ZTE / ISP Gateway": {
+                        "color": "blue",
+                        "text": "ZTE / ISP Gateway"
+                      },
+                      "Private Wi-Fi (Apple/Android)": {
+                        "color": "orange",
+                        "text": "Private Wi-Fi (Apple/Android)"
+                      },
+                      "Intel Corp": {
+                        "color": "blue",
+                        "text": "Intel Corp"
+                      },
+                      "Samsung": {
+                        "color": "blue",
+                        "text": "Samsung"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Identifier (MAC / OS)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 155
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Link Type"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "direct": {
+                        "color": "green",
+                        "text": "direct"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 11,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 31
       },
-      "id": 4,
+      "id": 13,
       "options": {
-        "cellHeight": "sm",
-        "showHeader": true
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Network"
+          },
+          {
+            "desc": false,
+            "displayName": "IP Address"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "net_device_info",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Unified Device Inventory (LAN & Tailscale)",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "network": "Network",
+              "name": "Device Name",
+              "ip": "IP Address",
+              "device_type": "Device Profile",
+              "services": "Detected Services",
+              "vendor": "Hardware Vendor",
+              "identifier": "Identifier (MAC / OS)",
+              "status": "Status",
+              "link_type": "Link Type"
+            },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value": true
+            },
+            "indexByName": {
+              "Network": 0,
+              "Status": 1,
+              "IP Address": 2,
+              "Device Name": 3,
+              "Device Profile": 4,
+              "Detected Services": 5,
+              "Hardware Vendor": 6,
+              "Identifier (MAC / OS)": 7,
+              "Link Type": 8
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "id": 103,
+      "title": "Ports & Active Connections",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Listening ports categorized by security exposure. Red = Public / LAN (0.0.0.0), Green = Tailscale Only, Blue = Localhost Only.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Port"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Protocol"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "tcp": {
+                        "color": "blue",
+                        "text": "TCP"
+                      },
+                      "udp": {
+                        "color": "orange",
+                        "text": "UDP"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bind IP"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Exposure"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 165
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "Public / LAN": {
+                        "color": "red",
+                        "text": "Public / LAN"
+                      },
+                      "Tailscale Only": {
+                        "color": "green",
+                        "text": "Tailscale Only"
+                      },
+                      "Localhost Only": {
+                        "color": "blue",
+                        "text": "Localhost Only"
+                      },
+                      "Specific LAN": {
+                        "color": "orange",
+                        "text": "Specific LAN"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 13,
+        "x": 0,
+        "y": 43
+      },
+      "id": 14,
+      "options": {
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Exposure"
+          },
+          {
+            "desc": false,
+            "displayName": "Port"
+          }
+        ]
       },
       "targets": [
         {
           "expr": "net_listening_port_info",
           "format": "table",
           "instant": true,
+          "legendFormat": "",
           "refId": "A"
         }
       ],
-      "title": "Bảng Danh sách Cổng Đang Lắng nghe & Tiến trình",
+      "title": "Open Listening Ports",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "port": "Port",
+              "proto": "Protocol",
+              "bind_ip": "Bind IP",
+              "exposure": "Exposure",
+              "service": "Service / Process"
+            },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value": true
+            },
+            "indexByName": {
+              "Exposure": 0,
+              "Port": 1,
+              "Protocol": 2,
+              "Bind IP": 3,
+              "Service / Process": 4
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Active established connections communicating with services on this iMac.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Proto"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "tcp": {
+                        "color": "blue",
+                        "text": "TCP"
+                      },
+                      "udp": {
+                        "color": "orange",
+                        "text": "UDP"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Local Port"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Remote IP"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 210
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Remote Port"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "State"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 135
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "ESTABLISHED": {
+                        "color": "green",
+                        "text": "ESTABLISHED"
+                      },
+                      "CLOSE_WAIT": {
+                        "color": "yellow",
+                        "text": "CLOSE_WAIT"
+                      },
+                      "TIME_WAIT": {
+                        "color": "orange",
+                        "text": "TIME_WAIT"
+                      },
+                      "FIN_WAIT": {
+                        "color": "red",
+                        "text": "FIN_WAIT"
+                      },
+                      "LAST_ACK": {
+                        "color": "orange",
+                        "text": "LAST_ACK"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 11,
+        "x": 13,
+        "y": 43
+      },
+      "id": 15,
+      "options": {
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Local Port"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "net_active_connection_info",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Established Connections",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "proto": "Proto",
+              "local_port": "Local Port",
+              "remote_ip": "Remote IP",
+              "remote_port": "Remote Port",
+              "state": "State"
+            },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value": true
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "id": 104,
+      "title": "Firewall & Traffic Filtering",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Active iptables packet filtering rules. Chain color: INPUT=blue, OUTPUT=green, FORWARD=orange. Action: green=ACCEPT, red=DROP/REJECT.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Chain"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "INPUT": {
+                        "color": "blue",
+                        "text": "INPUT"
+                      },
+                      "OUTPUT": {
+                        "color": "green",
+                        "text": "OUTPUT"
+                      },
+                      "FORWARD": {
+                        "color": "orange",
+                        "text": "FORWARD"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Action"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "ACCEPT": {
+                        "color": "green",
+                        "text": "ACCEPT"
+                      },
+                      "DROP": {
+                        "color": "red",
+                        "text": "DROP"
+                      },
+                      "REJECT": {
+                        "color": "red",
+                        "text": "REJECT"
+                      },
+                      "RETURN": {
+                        "color": "blue",
+                        "text": "RETURN"
+                      },
+                      "LOG": {
+                        "color": "yellow",
+                        "text": "LOG"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Proto"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Packets"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Bytes"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "id": 16,
+      "options": {
+        "sortBy": [
+          {
+            "desc": false,
+            "displayName": "Chain"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "editorMode": "code",
+          "expr": "net_security_setting",
+          "format": "table",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Windows Firewall Profiles & Security Settings",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "chain": "Chain",
+              "target": "Action",
+              "proto": "Proto",
+              "source": "Source",
+              "dest": "Destination",
+              "packets": "Packets",
+              "bytes": "Bytes",
+              "extra": "Match Criteria"
+            },
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value": true
+            }
+          }
+        }
+      ],
       "type": "table"
     }
   ],
-  "refresh": "5s",
-  "schemaVersion": 38,
-  "style": "dark",
+  "refresh": "15s",
+  "schemaVersion": 41,
   "tags": [
-    "windows",
     "network",
-    "ping",
-    "ports"
+    "security",
+    "tailscale",
+    "imac"
   ],
+  "templating": {
+    "list": []
+  },
   "time": {
     "from": "now-1h",
     "to": "now"
   },
+  "timepicker": {},
   "timezone": "browser",
   "title": "Windows - Network & Security",
   "uid": "windows-network",
-  "version": 1
+  "version": 5
 }
-

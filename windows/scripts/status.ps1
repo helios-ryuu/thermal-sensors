@@ -10,6 +10,9 @@ Write-Host "  WINDOWS MONITORING SERVICES STATUS                     " -Foregrou
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 $Services = @("WindowsThermalAgent", "WindowsPrometheus", "WindowsGrafana")
+if (Get-Service -Name "WindowsLHM" -ErrorAction SilentlyContinue) {
+    $Services += "WindowsLHM"
+}
 foreach ($s in $Services) {
     $svc = Get-Service -Name $s -ErrorAction SilentlyContinue
     if ($svc) {

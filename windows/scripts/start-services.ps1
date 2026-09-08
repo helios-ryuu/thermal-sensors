@@ -3,6 +3,9 @@
 # ==============================================================================
 
 $Services = @("WindowsThermalAgent", "WindowsPrometheus", "WindowsGrafana")
+if (Get-Service -Name "WindowsLHM" -ErrorAction SilentlyContinue) {
+    $Services = @("WindowsLHM") + $Services
+}
 
 Write-Host "Starting / Restarting monitoring services..." -ForegroundColor Cyan
 foreach ($s in $Services) {

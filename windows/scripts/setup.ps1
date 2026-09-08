@@ -206,6 +206,39 @@ if (!(Test-Path $NssmExe)) {
     Write-Host "[OK] NSSM already exists in bin\nssm\" -ForegroundColor Green
 }
 
+# 3b. DOWNLOAD LIBRE HARDWARE MONITOR (PORTABLE FOR VOLTAGES 12V/5V/3.3V AND SENSORS)
+$LhmFinalDir = Join-Path $BinDir "lhm"
+$LhmExe = Join-Path $LhmFinalDir "LibreHardwareMonitor.exe"
+if (!(Test-Path $LhmExe)) {
+    Write-Host "`nQuerying latest LibreHardwareMonitor release..." -ForegroundColor Yellow
+    $LhmUrl = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.3/LibreHardwareMonitor-net472.zip"
+    try {
+        $lhmRel = Invoke-RestMethod -Uri "https://api.github.com/repos/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest" -Headers @{"User-Agent"="PowerShell"} -TimeoutSec 6
+        $zipAsset = $lhmRel.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+        if ($zipAsset -and $zipAsset.browser_download_url) {
+            $LhmUrl = $zipAsset.browser_download_url
+            Write-Host "[LATEST] Found latest LibreHardwareMonitor: $($lhmRel.tag_name)" -ForegroundColor Green
+        }
+    } catch {
+        Write-Host "[FALLBACK] Using standard release URL: $LhmUrl" -ForegroundColor Gray
+    }
+
+    $ZipPath = Join-Path $BinDir "lhm.zip"
+    Write-Host "[DOWNLOAD] Downloading LibreHardwareMonitor portable..." -ForegroundColor Yellow
+    try {
+        Invoke-WebRequest -Uri $LhmUrl -OutFile $ZipPath -UseBasicParsing -TimeoutSec 60
+        Write-Host "[EXTRACT] Extracting LibreHardwareMonitor..." -ForegroundColor Yellow
+        New-Item -ItemType Directory -Force -Path $LhmFinalDir | Out-Null
+        Expand-Archive -Path $ZipPath -DestinationPath $LhmFinalDir -Force
+        Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
+        Write-Host "[OK] LibreHardwareMonitor portable setup complete!" -ForegroundColor Green
+    } catch {
+        Write-Host "[WARN] Could not download LibreHardwareMonitor ($_); agent will use native Windows sensors." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "[OK] LibreHardwareMonitor already exists in bin\lhm\" -ForegroundColor Green
+}
+
 # ==============================================================================
 # 4. SYNC CONFIGURATIONS AND DASHBOARDS FOR GRAFANA
 # ==============================================================================

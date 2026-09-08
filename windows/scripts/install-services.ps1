@@ -102,7 +102,7 @@ Register-Or-Update-Service `
 $PromExe = Join-Path $BaseDir "bin\prometheus\prometheus.exe"
 $PromCfg = Join-Path $BaseDir "config\prometheus.yml"
 $PromData = Join-Path $BaseDir "data\prometheus"
-$PromArgs = "--config.file=`"$PromCfg`" --storage.tsdb.path=`"$PromData`" --storage.tsdb.retention.time=30d --web.listen-address=`"0.0.0.0:9090`""
+$PromArgs = "--config.file=`"$PromCfg`" --storage.tsdb.path=`"$PromData`" --storage.tsdb.retention.time=30d --web.listen-address=`"0.0.0.0:9090`" --web.enable-admin-api --web.enable-lifecycle"
 
 Register-Or-Update-Service `
     -ServiceName "WindowsPrometheus" `
@@ -172,6 +172,18 @@ Register-Or-Update-Service `
     -AppDir $GrafHome `
     -StdoutPath (Join-Path $BaseDir "logs\grafana.log") `
     -StderrPath (Join-Path $BaseDir "logs\grafana.log")
+
+# 5. Service: WindowsLHM (Optional - for Motherboard 12V/5V/3.3V voltages and CPU Package Power)
+$LhmExe = Join-Path $BaseDir "bin\lhm\LibreHardwareMonitor.exe"
+if (Test-Path $LhmExe) {
+    Register-Or-Update-Service `
+        -ServiceName "WindowsLHM" `
+        -AppPath $LhmExe `
+        -AppParams "" `
+        -AppDir (Join-Path $BaseDir "bin\lhm") `
+        -StdoutPath (Join-Path $BaseDir "logs\lhm.log") `
+        -StderrPath (Join-Path $BaseDir "logs\lhm.log")
+}
 
 # 4. Firewall Inbound Rule for Tailscale / Remote access
 try {

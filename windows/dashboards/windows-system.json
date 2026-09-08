@@ -18,7 +18,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "Tổng quan CPU & Bộ nhớ (RAM / Pagefile)",
+      "title": "T\u1ed5ng quan CPU & B\u1ed9 nh\u1edb (RAM / Pagefile)",
       "type": "row"
     },
     {
@@ -81,7 +81,7 @@
           "refId": "A"
         }
       ],
-      "title": "CPU Sử dụng Tổng thể (%)",
+      "title": "CPU S\u1eed d\u1ee5ng T\u1ed5ng th\u1ec3 (%)",
       "type": "gauge"
     },
     {
@@ -144,7 +144,7 @@
           "refId": "A"
         }
       ],
-      "title": "Bộ nhớ RAM (%)",
+      "title": "B\u1ed9 nh\u1edb RAM (%)",
       "type": "gauge"
     },
     {
@@ -261,7 +261,7 @@
           "refId": "A"
         }
       ],
-      "title": "Thời gian Máy Chạy Liên tục (Uptime)",
+      "title": "Th\u1eddi gian M\u00e1y Ch\u1ea1y Li\u00ean t\u1ee5c (Uptime)",
       "type": "stat"
     },
     {
@@ -310,7 +310,7 @@
           "refId": "A"
         }
       ],
-      "title": "Tải Từng Nhân CPU (Per-Core Util %)",
+      "title": "T\u1ea3i T\u1eebng Nh\u00e2n CPU (Per-Core Util %)",
       "type": "timeseries"
     },
     {
@@ -362,7 +362,7 @@
           "refId": "B"
         }
       ],
-      "title": "Dung lượng RAM & Pagefile Đang Sử dụng",
+      "title": "Dung l\u01b0\u1ee3ng RAM & Pagefile \u0110ang S\u1eed d\u1ee5ng",
       "type": "timeseries"
     },
     {
@@ -371,10 +371,434 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 20
+      },
+      "id": 300,
+      "title": "Hi\u1ec7u n\u0103ng & B\u0103ng th\u00f4ng \u1ed4 \u0111\u0129a (Disk I/O Bandwidth & IOPS)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity"
+          },
+          "unit": "binBps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "\u0110\u1ecdc (Read)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ghi (Write)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "id": 301,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_disk_read_bytes_total[1m])",
+          "legendFormat": "\u0110\u1ecdc (Read)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_disk_written_bytes_total[1m])",
+          "legendFormat": "Ghi (Write)",
+          "refId": "B"
+        }
+      ],
+      "title": "B\u0103ng th\u00f4ng \u0110\u1ecdc / Ghi \u1ed4 \u0111\u0129a (Disk I/O Bandwidth)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "unit": "iops"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Read IOPS"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Write IOPS"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "id": 302,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_disk_reads_completed_total[1m])",
+          "legendFormat": "Read IOPS",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_disk_writes_completed_total[1m])",
+          "legendFormat": "Write IOPS",
+          "refId": "B"
+        }
+      ],
+      "title": "T\u1ea7n su\u1ea5t Truy xu\u1ea5t \u1ed4 \u0111\u0129a (Disk IOPS)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "id": 400,
+      "title": "Hi\u1ec7u n\u0103ng B\u0103ng th\u00f4ng M\u1ea1ng & K\u1ebft n\u1ed1i TCP (Network Bandwidth & TCP States)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity"
+          },
+          "unit": "binBps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "T\u1ea3i v\u1ec1 (Download)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "T\u1ea3i l\u00ean (Upload)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      },
+      "id": 401,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_network_receive_bytes_total[1m])",
+          "legendFormat": "T\u1ea3i v\u1ec1 (Download)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_network_transmit_bytes_total[1m])",
+          "legendFormat": "T\u1ea3i l\u00ean (Upload)",
+          "refId": "B"
+        }
+      ],
+      "title": "B\u0103ng th\u00f4ng M\u1ea1ng (Network Bandwidth)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2
+          },
+          "unit": "pps"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 31
+      },
+      "id": 402,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_network_receive_drop_total[1m])",
+          "legendFormat": "Drop In",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_network_transmit_drop_total[1m])",
+          "legendFormat": "Drop Out",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_network_receive_errs_total[1m])",
+          "legendFormat": "Err In",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "rate(system_network_transmit_errs_total[1m])",
+          "legendFormat": "Err Out",
+          "refId": "D"
+        }
+      ],
+      "title": "G\u00f3i tin B\u1ecb Drop & L\u1ed7i M\u1ea1ng (Network Drops & Errors)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 31
+      },
+      "id": 403,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "system_tcp_connections",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tr\u1ea1ng th\u00e1i K\u1ebft n\u1ed1i TCP (TCP States)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
       },
       "id": 200,
-      "title": "Phân vùng Ổ đĩa Windows (C:, D:...)",
+      "title": "Ph\u00e2n v\u00f9ng \u1ed4 \u0111\u0129a Windows (C:, D:...)",
       "type": "row"
     },
     {
@@ -414,7 +838,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 36
       },
       "id": 7,
       "options": {
@@ -433,11 +857,11 @@
         {
           "expr": "system_disk_utilization_percent",
           "instant": true,
-          "legendFormat": "Ổ {{drive}}",
+          "legendFormat": "\u1ed4 {{drive}}",
           "refId": "A"
         }
       ],
-      "title": "Tỷ lệ Sử dụng Dung lượng Ổ đĩa (%)",
+      "title": "T\u1ef7 l\u1ec7 S\u1eed d\u1ee5ng Dung l\u01b0\u1ee3ng \u1ed4 \u0111\u0129a (%)",
       "type": "gauge"
     },
     {
@@ -457,7 +881,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 36
       },
       "id": 8,
       "options": {
@@ -472,7 +896,7 @@
           "refId": "A"
         }
       ],
-      "title": "Bảng Chi tiết Dung lượng Ổ đĩa",
+      "title": "B\u1ea3ng Chi ti\u1ebft Dung l\u01b0\u1ee3ng \u1ed4 \u0111\u0129a",
       "type": "table"
     }
   ],
@@ -495,4 +919,3 @@
   "uid": "windows-system",
   "version": 1
 }
-

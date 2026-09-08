@@ -18,7 +18,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "Nhiệt độ & Quạt Card Đồ họa NVIDIA",
+      "title": "Nhi\u1ec7t \u0111\u1ed9 & Qu\u1ea1t Card \u0110\u1ed3 h\u1ecda NVIDIA",
       "type": "row"
     },
     {
@@ -278,7 +278,7 @@
           "refId": "A"
         }
       ],
-      "title": "Tốc độ Quạt GPU (%)",
+      "title": "T\u1ed1c \u0111\u1ed9 Qu\u1ea1t GPU (%)",
       "type": "gauge"
     },
     {
@@ -335,7 +335,7 @@
           "refId": "C"
         }
       ],
-      "title": "Lịch sử Nhiệt độ GPU NVIDIA",
+      "title": "L\u1ecbch s\u1eed Nhi\u1ec7t \u0111\u1ed9 GPU NVIDIA",
       "type": "timeseries"
     },
     {
@@ -347,7 +347,7 @@
         "y": 15
       },
       "id": 200,
-      "title": "Nhiệt độ CPU & Ổ cứng NVMe SSD",
+      "title": "Nhi\u1ec7t \u0111\u1ed9 CPU & \u1ed4 c\u1ee9ng NVMe SSD",
       "type": "row"
     },
     {
@@ -399,7 +399,7 @@
           "refId": "B"
         }
       ],
-      "title": "Lịch sử Nhiệt độ CPU & Ổ cứng",
+      "title": "L\u1ecbch s\u1eed Nhi\u1ec7t \u0111\u1ed9 CPU & \u1ed4 c\u1ee9ng",
       "type": "timeseries"
     },
     {
@@ -437,7 +437,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 4,
         "x": 16,
         "y": 16
       },
@@ -457,13 +457,76 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "cpu_package_temperature_celsius",
+          "expr": "cpu_package_temperature_celsius or cpu_package_temp_celsius",
           "instant": true,
           "legendFormat": "CPU Package",
           "refId": "A"
         }
       ],
-      "title": "CPU Package Temp Hiện tại",
+      "title": "CPU Package Temp Hi\u1ec7n t\u1ea1i",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "max": 85,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 75
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 16
+      },
+      "id": 8,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "expr": "nvme_temperature_celsius or system_disk_temperature_celsius",
+          "instant": true,
+          "legendFormat": "{{disk}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Nhi\u1ec7t \u0111\u1ed9 \u1ed4 c\u1ee9ng (NVMe / SSD)",
       "type": "gauge"
     }
   ],
@@ -485,4 +548,3 @@
   "uid": "windows-thermals",
   "version": 1
 }
-

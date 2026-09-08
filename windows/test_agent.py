@@ -146,6 +146,27 @@ Thời gian khứ hồi xấp xỉ tính bằng mili giây:
                     self.assertIn('net_ping_latency_ms{category="local_network",service="Gateway",target="gateway"} 0.8', metrics)
                     self.assertIn('net_ping_latency_ms{category="global_dns",service="Cloudflare (1.1.1.1)",target="cloudflare"} 38.5', metrics)
 
+    def test_detect_cgnat(self):
+        # 100.64.0.0/10 is CGNAT
+        is_cg, is_priv = agent.detect_cgnat("100.70.50.2")
+        self.assertEqual(is_cg, 1)
+        self.assertEqual(is_priv, 0)
+
+        # RFC1918 Private
+        is_cg, is_priv = agent.detect_cgnat("192.168.1.50")
+        self.assertEqual(is_cg, 0)
+        self.assertEqual(is_priv, 1)
+
+        # Public IP
+        is_cg, is_priv = agent.detect_cgnat("116.100.47.230")
+        self.assertEqual(is_cg, 0)
+        self.assertEqual(is_priv, 0)
+
+    def test_escape_label_value(self):
+        raw = 'C:\\Program Files\\"app"\nline2'
+        escaped = agent.escape_label_value(raw)
+        self.assertEqual(escaped, 'C:\\\\Program Files\\\\\\"app\\"\\nline2')
+
 
 if __name__ == "__main__":
     unittest.main()
