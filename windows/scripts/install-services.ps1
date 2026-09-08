@@ -55,6 +55,39 @@ Write-Host "==========================================================" -Foregro
 Write-Host "  REGISTERING WINDOWS SERVICES VIA NSSM                  " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
+function Register-Or-Update-Service {
+    param(
+        [string]$ServiceName,
+        [string]$AppPath,
+        [string]$AppParams,
+        [string]$AppDir,
+        [string]$StdoutPath,
+        [string]$StderrPath,
+        [string]$EnvExtra = $null
+    )
+
+    $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if (!$existing) {
+        Write-Host "[INSTALL] Registering Service: $ServiceName..." -ForegroundColor Yellow
+        & $NssmExe install $ServiceName $AppPath $AppParams | Out-Null
+    } else {
+        Write-Host "[UPDATE] Updating existing Service: $ServiceName..." -ForegroundColor Yellow
+    }
+
+    & $NssmExe set $ServiceName Application $AppPath | Out-Null
+    & $NssmExe set $ServiceName AppParameters $AppParams | Out-Null
+    & $NssmExe set $ServiceName AppDirectory $AppDir | Out-Null
+    & $NssmExe set $ServiceName AppStdout $StdoutPath | Out-Null
+    & $NssmExe set $ServiceName AppStderr $StderrPath | Out-Null
+    & $NssmExe set $ServiceName AppRotateFiles 1 | Out-Null
+    & $NssmExe set $ServiceName AppRotateBytes 10485760 | Out-Null
+    if ($EnvExtra) {
+        & $NssmExe set $ServiceName AppEnvironmentExtra $EnvExtra | Out-Null
+    }
+    & $NssmExe set $ServiceName Start SERVICE_AUTO_START | Out-Null
+    Write-Host "  [OK] Service $ServiceName configured -> $AppPath" -ForegroundColor Green
+}
+
 # 1. Service: WindowsThermalAgent
 $AgentService = "WindowsThermalAgent"
 Write-Host "[INSTALL] Registering Service: $AgentService..." -ForegroundColor Yellow
@@ -66,6 +99,14 @@ Write-Host "[INSTALL] Registering Service: $AgentService..." -ForegroundColor Ye
 & $NssmExe set $AgentService AppRotateBytes 10485760 # 10MB
 & $NssmExe set $AgentService AppEnvironmentExtra "PYTHONIOENCODING=utf-8"
 & $NssmExe set $AgentService Start SERVICE_AUTO_START
+Register-Or-Update-Service `
+    -ServiceName "WindowsThermalAgent" `
+    -AppPath $PythonCmd `
+    -AppParams (Join-Path $BaseDir "agent.py") `
+    -AppDir $BaseDir `
+    -StdoutPath (Join-Path $BaseDir "logs\agent.log") `
+    -StderrPath (Join-Path $BaseDir "logs\agent.log") `
+    -EnvExtra "PYTHONIOENCODING=utf-8"
 
 # 2. Service: WindowsPrometheus
 $PromService = "WindowsPrometheus"
@@ -80,6 +121,13 @@ Write-Host "[INSTALL] Registering Service: $PromService..." -ForegroundColor Yel
 & $NssmExe set $PromService AppStdout (Join-Path $BaseDir "logs\prometheus.log")
 & $NssmExe set $PromService AppStderr (Join-Path $BaseDir "logs\prometheus.log")
 & $NssmExe set $PromService Start SERVICE_AUTO_START
+Register-Or-Update-Service `
+    -ServiceName "WindowsPrometheus" `
+    -AppPath $PromExe `
+    -AppParams $PromArgs `
+    -AppDir (Join-Path $BaseDir "bin\prometheus") `
+    -StdoutPath (Join-Path $BaseDir "logs\prometheus.log") `
+    -StderrPath (Join-Path $BaseDir "logs\prometheus.log")
 
 # 3. Service: WindowsGrafana
 $GrafService = "WindowsGrafana"
@@ -106,6 +154,13 @@ Write-Host "[INSTALL] Registering Service: $GrafService using $GrafExe..." -Fore
 & $NssmExe set $GrafService AppStdout (Join-Path $BaseDir "logs\grafana.log")
 & $NssmExe set $GrafService AppStderr (Join-Path $BaseDir "logs\grafana.log")
 & $NssmExe set $GrafService Start SERVICE_AUTO_START
+Register-Or-Update-Service `
+    -ServiceName "WindowsGrafana" `
+    -AppPath $GrafExe `
+    -AppParams $GrafArgs `
+    -AppDir $GrafHome `
+    -StdoutPath (Join-Path $BaseDir "logs\grafana.log") `
+    -StderrPath (Join-Path $BaseDir "logs\grafana.log")
 
 # 4. Firewall Inbound Rule for Tailscale / Remote access
 try {
