@@ -28,9 +28,45 @@ New-Item -ItemType Directory -Force -Path $GrafDataDir | Out-Null
 # ==============================================================================
 # 2. CHECK AND AUTO-INSTALL LATEST 64-BIT PYTHON (SILENT, ZERO-REBOOT)
 # ==============================================================================
-$HasPython = Get-Command python.exe -ErrorAction SilentlyContinue
-if (!$HasPython) {
-    Write-Host "[CHECK] Python not found in PATH. Finding latest Python release..." -ForegroundColor Yellow
+# Check if real Python exists (ignoring WindowsApps redirector stub)
+$pyCmd = Get-Command python.exe -ErrorAction SilentlyContinue
+$HasRealPython = $false
+$RealPyExe = $null
+
+if ($pyCmd -and $pyCmd.Source -notmatch "WindowsApps") {
+    $testVer = & $pyCmd.Source --version 2>$null
+    if ($testVer -match "Python\s+[0-9]+") {
+        $HasRealPython = $true
+        $RealPyExe = $pyCmd.Source
+    }
+}
+
+if (!$HasRealPython) {
+    # Check if installed in common directory but not in session PATH
+    $commonSearch = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "C:\Program Files\Python313\python.exe",
+        "C:\Program Files\Python312\python.exe",
+        "C:\Program Files\Python311\python.exe"
+    )
+    foreach ($c in $commonSearch) {
+        if (Test-Path $c) {
+            $testVer = & $c --version 2>$null
+            if ($testVer -match "Python\s+[0-9]+") {
+                $HasRealPython = $true
+                $RealPyExe = $c
+                $cDir = Split-Path -Parent $c
+                $env:Path = "$cDir;$cDir\Scripts;" + $env:Path
+                break
+            }
+        }
+    }
+}
+
+if (!$HasRealPython) {
+    Write-Host "[CHECK] Real Python not found (ignoring WindowsApps stub). Finding latest Python release..." -ForegroundColor Yellow
     $PyUrl = "https://www.python.org/ftp/python/3.12.5/python-3.12.5-amd64.exe"
     $LatestPyVer = "3.12.5"
     try {
@@ -51,11 +87,30 @@ if (!$HasPython) {
     Start-Process -FilePath $PyInstaller -ArgumentList "/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_pip=1" -Wait
     Remove-Item $PyInstaller -Force
     
-    # Refresh PATH in current session
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-    Write-Host "[OK] Successfully installed Python $LatestPyVer!" -ForegroundColor Green
+    # Locate the newly installed Python
+    if (Test-Path "$env:LOCALAPPDATA\Programs\Python") {
+        $newPy = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter "python.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($newPy) {
+            $RealPyExe = $newPy.FullName
+        }
+    }
+    if (!$RealPyExe) {
+        foreach ($c in $commonSearch) {
+            if (Test-Path $c) {
+                $RealPyExe = $c
+                break
+            }
+        }
+    }
+    if ($RealPyExe) {
+        $newDir = Split-Path -Parent $RealPyExe
+        $env:Path = "$newDir;$newDir\Scripts;" + $env:Path
+        Write-Host "[OK] Successfully installed Python $LatestPyVer: $RealPyExe" -ForegroundColor Green
+    } else {
+        Write-Host "[WARN] Python installed, but python.exe could not be located." -ForegroundColor Yellow
+    }
 } else {
-    Write-Host "[OK] Detected existing Python installation: $(python --version 2>&1)" -ForegroundColor Green
+    Write-Host "[OK] Detected existing Python: $(& $RealPyExe --version 2>&1)" -ForegroundColor Green
 }
 
 # ==============================================================================
@@ -171,21 +226,24 @@ Write-Host "[CONFIG] Synchronized 4 Dashboards (Blackbox Crash, Thermals, System
 $ReqFile = Join-Path $BaseDir "requirements.txt"
 if (Test-Path $ReqFile) {
     Write-Host "`n[PIP] Installing Python requirements from requirements.txt..." -ForegroundColor Yellow
-    $PyExe = (Get-Command python.exe -ErrorAction SilentlyContinue).Source
+    $PyExe = $RealPyExe
     if (!$PyExe) {
-        $CommonPaths = @(
-            "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
-            "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-            "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
-            "C:\Program Files\Python313\python.exe",
-            "C:\Program Files\Python312\python.exe",
-            "C:\Program Files\Python311\python.exe"
-        )
-        foreach ($p in $CommonPaths) {
-            if (Test-Path $p) { $PyExe = $p; break }
+        $pyCmd = Get-Command python.exe -ErrorAction SilentlyContinue
+        if ($pyCmd -and $pyCmd.Source -notmatch "WindowsApps") {
+            $PyExe = $pyCmd.Source
         }
     }
+    if (!$PyExe) {
+        foreach ($c in $commonSearch) {
+            if (Test-Path $c) { $PyExe = $c; break }
+        }
+    }
+    if (!$PyExe -and (Test-Path "$env:LOCALAPPDATA\Programs\Python")) {
+        $foundPy = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter "python.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($foundPy) { $PyExe = $foundPy.FullName }
+    }
     if ($PyExe) {
+        Write-Host "[PIP] Using Python: $PyExe" -ForegroundColor Cyan
         & $PyExe -m pip install --upgrade pip --quiet
         & $PyExe -m pip install -r $ReqFile --quiet
         Write-Host "[OK] Installed Python packages (psutil, pynvml, prometheus-client, requests)." -ForegroundColor Green

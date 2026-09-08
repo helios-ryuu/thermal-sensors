@@ -12,8 +12,13 @@ if (!(Test-Path $NssmExe)) {
     exit 1
 }
 
-# Locate Python executable
-$PythonCmd = (Get-Command python.exe -ErrorAction SilentlyContinue).Source
+# Locate Python executable (ignoring WindowsApps redirector stub)
+$pyCmd = Get-Command python.exe -ErrorAction SilentlyContinue
+$PythonCmd = $null
+if ($pyCmd -and $pyCmd.Source -notmatch "WindowsApps") {
+    $PythonCmd = $pyCmd.Source
+}
+
 if (!$PythonCmd) {
     $CommonPaths = @(
         "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
@@ -32,9 +37,19 @@ if (!$PythonCmd) {
         }
     }
 }
-if (!$PythonCmd) {
-    $PythonCmd = "python.exe"
+
+if (!$PythonCmd -and (Test-Path "$env:LOCALAPPDATA\Programs\Python")) {
+    $foundPy = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter "python.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($foundPy) {
+        $PythonCmd = $foundPy.FullName
+    }
 }
+
+if (!$PythonCmd) {
+    Write-Host "[ERROR] Real python.exe not found! Please run .\scripts\setup.ps1 first." -ForegroundColor Red
+    exit 1
+}
+Write-Host "[AGENT] Using Python for service: $PythonCmd" -ForegroundColor Cyan
 
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "  REGISTERING WINDOWS SERVICES VIA NSSM                  " -ForegroundColor Cyan
