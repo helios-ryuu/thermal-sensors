@@ -86,9 +86,12 @@ slow_cache = {
     "public_ipv6": "None",
     "isp": "unknown",
     "gateway_ip": "",
+    "gateway_mac": "-",
+    "gateway_iface": "Ethernet",
     "dns_servers": [],
     "double_nat": 0,
     "cgnat": 0,
+    "symmetric": 0,
     "tailscale_online": 0,
     "latencies": {},
     "latency_fail_counts": {},
@@ -224,7 +227,7 @@ class _NvThermalSettings(ctypes.Structure):
     _fields_ = [
         ("version", ctypes.c_uint32),
         ("count", ctypes.c_uint32),
-        ("sensor", _NvSensor * 32),
+        ("sensor", _NvSensor * 3), # Official NVAPI MAX_SENSORS_PER_GPU is 3 (68 bytes total)
     ]
 
 def query_nvapi_thermals():
@@ -262,34 +265,43 @@ def query_nvapi_thermals():
 
         for i in range(gpu_count.value):
             h = gpu_handles[i]
-            settings = _NvThermalSettings()
-            settings.version = ctypes.sizeof(_NvThermalSettings) | (2 << 16)
-            settings.count = 0
-            if NvAPI_GPU_GetThermalSettings(h, 15, ctypes.byref(settings)) == 0:
-                core = None
-                hotspot = None
-                vram = None
-                for s_idx in range(min(settings.count, 32)):
-                    s = settings.sensor[s_idx]
-                    t_val = float(s.currentTemp)
-                    if 0 < t_val < 130:
-                        if s.target == 1 and core is None:
-                            core = t_val
-                        elif s.target == 2 and vram is None:
-                            vram = t_val
-                        elif s.target in (8, 9) and hotspot is None:
-                            hotspot = t_val
-                        elif s_idx == 1 and hotspot is None:
-                            hotspot = t_val
-                        elif s_idx == 2 and vram is None:
-                            vram = t_val
-                res[i] = {"core": core, "hotspot": hotspot, "vram": vram}
+            found = False
+            # Try official V2 (0x20044) then V1 (0x10044)
+            for ver_code in (0x20044, 0x10044):
+                if found:
+                    break
+                for s_target in (0, 15):
+                    settings = _NvThermalSettings()
+                    settings.version = ver_code
+                    settings.count = 0
+                    if NvAPI_GPU_GetThermalSettings(h, s_target, ctypes.byref(settings)) == 0 and settings.count > 0:
+                        core = None
+                        hotspot = None
+                        vram = None
+                        for s_idx in range(min(settings.count, 3)):
+                            s = settings.sensor[s_idx]
+                            t_val = float(s.currentTemp)
+                            if 0 < t_val < 130:
+                                if s.target == 1 and core is None:
+                                    core = t_val
+                                elif s.target == 2 and vram is None:
+                                    vram = t_val
+                                elif s.target in (3, 8, 9) and hotspot is None:
+                                    hotspot = t_val
+                                elif s_idx == 1 and hotspot is None:
+                                    hotspot = t_val
+                                elif s_idx == 2 and vram is None:
+                                    vram = t_val
+                        if core or hotspot or vram:
+                            res[i] = {"core": core, "hotspot": hotspot, "vram": vram}
+                            found = True
+                            break
     except Exception as e:
         logging.debug(f"NVAPI thermals error: {e}")
     return res
 
 
-def collect_nvidia_gpu_metrics():
+def collect_nvidia_gpu_metrics(lhm_hardware=None):
     gpus = []
 
     # 1. Native pynvml
@@ -410,7 +422,15 @@ def collect_nvidia_gpu_metrics():
         if g.get("temp_core") is None and nv.get("core") is not None:
             g["temp_core"] = nv["core"]
 
-    # 3. Fallback to nvidia-smi if NVML completely failed
+    # 3. Fallback to LibreHardwareMonitor for GPU Hotspot/VRAM if still None
+    if lhm_hardware:
+        for g in gpus:
+            if g.get("temp_hotspot") is None and lhm_hardware.get("gpu_hotspot") is not None:
+                g["temp_hotspot"] = lhm_hardware["gpu_hotspot"]
+            if g.get("temp_mem") is None and lhm_hardware.get("gpu_vram") is not None:
+                g["temp_mem"] = lhm_hardware["gpu_vram"]
+
+    # 4. Fallback to nvidia-smi if NVML completely failed
     if not gpus:
         smi_data = query_nvidia_smi()
         if smi_data:
@@ -421,6 +441,11 @@ def collect_nvidia_gpu_metrics():
                     g["temp_hotspot"] = nv["hotspot"]
                 if nv.get("vram") is not None:
                     g["temp_mem"] = nv["vram"]
+                if lhm_hardware:
+                    if g.get("temp_hotspot") is None and lhm_hardware.get("gpu_hotspot"):
+                        g["temp_hotspot"] = lhm_hardware["gpu_hotspot"]
+                    if g.get("temp_mem") is None and lhm_hardware.get("gpu_vram"):
+                        g["temp_mem"] = lhm_hardware["gpu_vram"]
 
     # Calculate Hotspot Delta (Hotspot - Core)
     for g in gpus:
@@ -488,26 +513,79 @@ def collect_motherboard_and_cpu_power():
         "v33": None,
         "cpu_power_w": None,
         "cpu_temp_package": None,
+        "gpu_hotspot": None,
+        "gpu_vram": None,
         "nvme_temps": {},
     }
 
-    ps_cmd = [
-        "powershell", "-NoProfile", "-NonInteractive", "-Command",
-        """
-        try {
-            $sensors = Get-CimInstance -Namespace 'root\\LibreHardwareMonitor' -ClassName Sensor -ErrorAction Stop
-            $sensors | Select-Object Name, SensorType, Value | ConvertTo-Json -Compress
-        } catch {
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    lhm_dll = os.path.join(base_dir, "bin", "lhm", "LibreHardwareMonitorLib.dll")
+    ohm_dll = os.path.join(base_dir, "bin", "lhm", "OpenHardwareMonitorLib.dll")
+
+    # Method 1: In-process assembly load via PowerShell (Direct ring-0 SuperIO access)
+    if os.path.exists(lhm_dll):
+        ps_cmd = [
+            "powershell", "-NoProfile", "-NonInteractive", "-Command",
+            f"""
+            try {{
+                Add-Type -Path '{lhm_dll}' -ErrorAction Stop
+                $c = New-Object LibreHardwareMonitor.Hardware.Computer
+                $c.IsCpuEnabled = $true; $c.IsGpuEnabled = $true; $c.IsMotherboardEnabled = $true; $c.IsStorageEnabled = $true
+                $c.Open()
+                $list = @()
+                foreach ($h in $c.Hardware) {{
+                    $h.Update()
+                    foreach ($sub in $h.SubHardware) {{ $sub.Update() }}
+                    foreach ($s in $h.Sensors) {{
+                        $list += [PSCustomObject]@{{ Name = $s.Name; SensorType = $s.SensorType.ToString(); Value = $s.Value }}
+                    }}
+                }}
+                $c.Close()
+                $list | ConvertTo-Json -Compress
+            }} catch {{ '[]' }}
+            """
+        ]
+    elif os.path.exists(ohm_dll):
+        ps_cmd = [
+            "powershell", "-NoProfile", "-NonInteractive", "-Command",
+            f"""
+            try {{
+                Add-Type -Path '{ohm_dll}' -ErrorAction Stop
+                $c = New-Object OpenHardwareMonitor.Hardware.Computer
+                $c.IsCpuEnabled = $true; $c.IsGpuEnabled = $true; $c.IsMotherboardEnabled = $true; $c.IsStorageEnabled = $true
+                $c.Open()
+                $list = @()
+                foreach ($h in $c.Hardware) {{
+                    $h.Update()
+                    foreach ($sub in $h.SubHardware) {{ $sub.Update() }}
+                    foreach ($s in $h.Sensors) {{
+                        $list += [PSCustomObject]@{{ Name = $s.Name; SensorType = $s.SensorType.ToString(); Value = $s.Value }}
+                    }}
+                }}
+                $c.Close()
+                $list | ConvertTo-Json -Compress
+            }} catch {{ '[]' }}
+            """
+        ]
+    else:
+        # Method 2: Fallback to WMI
+        ps_cmd = [
+            "powershell", "-NoProfile", "-NonInteractive", "-Command",
+            """
             try {
-                $sensors = Get-CimInstance -Namespace 'root\\OpenHardwareMonitor' -ClassName Sensor -ErrorAction Stop
+                $sensors = Get-CimInstance -Namespace 'root\\LibreHardwareMonitor' -ClassName Sensor -ErrorAction Stop
                 $sensors | Select-Object Name, SensorType, Value | ConvertTo-Json -Compress
-            } catch { '[]' }
-        }
-        """
-    ]
+            } catch {
+                try {
+                    $sensors = Get-CimInstance -Namespace 'root\\OpenHardwareMonitor' -ClassName Sensor -ErrorAction Stop
+                    $sensors | Select-Object Name, SensorType, Value | ConvertTo-Json -Compress
+                } catch { '[]' }
+            }
+            """
+        ]
 
     try:
-        out = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=5)
+        out = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=6)
         if out.returncode == 0 and out.stdout.strip():
             raw = out.stdout.strip()
             items = []
@@ -545,6 +623,10 @@ def collect_motherboard_and_cpu_power():
                 elif stype == "temperature":
                     if "cpu package" in name or "package" in name or "core max" in name:
                         data["cpu_temp_package"] = round(fval, 1)
+                    elif "hot spot" in name or "hotspot" in name:
+                        data["gpu_hotspot"] = round(fval, 1)
+                    elif "gpu memory" in name or "vram" in name or "memory junction" in name:
+                        data["gpu_vram"] = round(fval, 1)
                     elif "nvme" in name or "ssd" in name or "drive" in name:
                         data["nvme_temps"][s.get("Name", "NVMe")] = round(fval, 1)
     except Exception:
@@ -724,23 +806,28 @@ def ping_target_windows(target_host):
 
 def get_default_gateway_and_dns_windows():
     gw = None
+    gw_iface = "Ethernet"
     dns_list = []
     try:
         out = subprocess.run(["ipconfig", "/all"], capture_output=True, text=True, timeout=4)
         if out.returncode == 0:
+            current_adapter = "Ethernet"
             for line in out.stdout.splitlines():
                 line = line.strip()
-                if "Default Gateway" in line or "Cổng mặc định" in line:
+                if "adapter" in line.lower() and ":" in line:
+                    current_adapter = line.split("adapter")[-1].replace(":", "").strip()
+                elif "Default Gateway" in line or "Cổng mặc định" in line:
                     m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", line)
                     if m and m.group(1) != "0.0.0.0" and not gw:
                         gw = m.group(1)
+                        gw_iface = current_adapter
                 elif "DNS Servers" in line or "Máy chủ DNS" in line:
                     m = re.search(r"(\d{1,3}(?:\.\d{1,3}){3})", line)
                     if m and m.group(1) not in dns_list:
                         dns_list.append(m.group(1))
     except Exception:
         pass
-    return gw, dns_list
+    return gw, gw_iface, dns_list
 
 
 def collect_listening_ports_windows():
@@ -1002,42 +1089,7 @@ def generate_prometheus_metrics():
             }
         )
 
-    # 2. NVIDIA GPU Metrics
-    gpus = collect_nvidia_gpu_metrics()
-    for g in gpus:
-        lbl = {"gpu": g["index"], "name": g["name"]}
-        add_sample(lines, "nvidia_gpu_temp_celsius", g.get("temp_core"), lbl)
-        add_sample(lines, "gpu_temperature_celsius", g.get("temp_core"), lbl)
-        add_sample(lines, "nvidia_gpu_hotspot_temp_celsius", g.get("temp_hotspot"), lbl)
-        add_sample(lines, "gpu_hotspot_temperature_celsius", g.get("temp_hotspot"), lbl)
-        add_sample(lines, "nvidia_gpu_vram_temp_celsius", g.get("temp_mem"), lbl)
-        add_sample(lines, "gpu_memory_temperature_celsius", g.get("temp_mem"), lbl)
-        add_sample(lines, "nvidia_gpu_hotspot_delta_celsius", g.get("hotspot_delta"), lbl)
-        add_sample(lines, "gpu_hotspot_delta_celsius", g.get("hotspot_delta"), lbl)
-        add_sample(lines, "nvidia_gpu_power_watts", g.get("power_w"), lbl)
-        add_sample(lines, "gpu_power_draw_watts", g.get("power_w"), lbl)
-        add_sample(lines, "nvidia_gpu_power_limit_watts", g.get("power_limit_w"), lbl)
-        add_sample(lines, "gpu_power_limit_watts", g.get("power_limit_w"), lbl)
-        add_sample(lines, "nvidia_gpu_fan_speed_percent", g.get("fan_pct"), lbl)
-        add_sample(lines, "gpu_fan_speed_percent", g.get("fan_pct"), lbl)
-        add_sample(lines, "nvidia_gpu_utilization_percent", g.get("util_gpu"), lbl)
-        add_sample(lines, "nvidia_gpu_memory_used_bytes", g.get("mem_used"), lbl)
-        add_sample(lines, "nvidia_gpu_memory_total_bytes", g.get("mem_total"), lbl)
-        add_sample(lines, "nvidia_gpu_clock_graphics_mhz", g.get("clock_core"), lbl)
-        add_sample(lines, "nvidia_gpu_clock_memory_mhz", g.get("clock_mem"), lbl)
-
-        # Standard thermal_temperature_celsius
-        add_sample(lines, "thermal_temperature_celsius", g.get("temp_core"), {"component": "gpu", "sensor": "core"})
-        if g.get("temp_hotspot"):
-            add_sample(lines, "thermal_temperature_celsius", g.get("temp_hotspot"), {"component": "gpu", "sensor": "hotspot"})
-        if g.get("temp_mem"):
-            add_sample(lines, "thermal_temperature_celsius", g.get("temp_mem"), {"component": "gpu", "sensor": "vram"})
-        if g.get("fan_pct"):
-            add_sample(lines, "thermal_fan_speed_percent", g.get("fan_pct"), {"component": "fan", "sensor": "gpu"})
-        if g.get("power_w"):
-            add_sample(lines, "thermal_gpu_power_watts", g.get("power_w"))
-
-    # 3. PSU Voltages, CPU Power & Physical Disks
+    # 2. PSU Voltages, CPU Power & Physical Disks
     hw = collect_motherboard_and_cpu_power()
     if hw.get("v12") is not None:
         add_sample(lines, "motherboard_voltage_12v", hw["v12"])
@@ -1055,15 +1107,65 @@ def generate_prometheus_metrics():
         add_sample(lines, "cpu_package_temperature_celsius", hw["cpu_temp_package"])
         add_sample(lines, "thermal_temperature_celsius", hw["cpu_temp_package"], {"component": "cpu", "sensor": "package"})
 
-    for nv_name, nv_temp in hw.get("nvme_temps", {}).items():
-        add_sample(lines, "nvme_temperature_celsius", nv_temp, {"disk": nv_name})
-        add_sample(lines, "thermal_temperature_celsius", nv_temp, {"component": "nvme", "sensor": nv_name})
+    # 3. NVIDIA GPU Metrics (with NVAPI, NVML field values, LHM fallback)
+    gpus = collect_nvidia_gpu_metrics(lhm_hardware=hw)
+    for g in gpus:
+        lbl = {"gpu": g["index"], "name": g["name"]}
+        # Core
+        add_sample(lines, "nvidia_gpu_temp_celsius", g.get("temp_core"), lbl)
+        add_sample(lines, "gpu_temperature_celsius", g.get("temp_core"), lbl)
+        # Hotspot
+        add_sample(lines, "nvidia_gpu_hotspot_temp_celsius", g.get("temp_hotspot"), lbl)
+        add_sample(lines, "gpu_hotspot_temperature_celsius", g.get("temp_hotspot"), lbl)
+        # VRAM / Memory
+        add_sample(lines, "nvidia_gpu_vram_temp_celsius", g.get("temp_mem"), lbl)
+        add_sample(lines, "gpu_memory_temperature_celsius", g.get("temp_mem"), lbl)
+        # Delta
+        add_sample(lines, "nvidia_gpu_hotspot_delta_celsius", g.get("hotspot_delta"), lbl)
+        add_sample(lines, "gpu_hotspot_delta_celsius", g.get("hotspot_delta"), lbl)
+        # Power
+        add_sample(lines, "nvidia_gpu_power_watts", g.get("power_w"), lbl)
+        add_sample(lines, "gpu_power_draw_watts", g.get("power_w"), lbl)
+        add_sample(lines, "nvidia_gpu_power_limit_watts", g.get("power_limit_w"), lbl)
+        add_sample(lines, "gpu_power_limit_watts", g.get("power_limit_w"), lbl)
+        # Fan
+        add_sample(lines, "nvidia_gpu_fan_speed_percent", g.get("fan_pct"), lbl)
+        add_sample(lines, "gpu_fan_speed_percent", g.get("fan_pct"), lbl)
+        # Utilization & Clocks
+        add_sample(lines, "nvidia_gpu_utilization_percent", g.get("util_gpu"), lbl)
+        add_sample(lines, "nvidia_gpu_memory_used_bytes", g.get("mem_used"), lbl)
+        add_sample(lines, "nvidia_gpu_memory_total_bytes", g.get("mem_total"), lbl)
+        add_sample(lines, "nvidia_gpu_clock_graphics_mhz", g.get("clock_core"), lbl)
+        add_sample(lines, "nvidia_gpu_clock_memory_mhz", g.get("clock_mem"), lbl)
 
+        # Standard thermal_temperature_celsius
+        add_sample(lines, "thermal_temperature_celsius", g.get("temp_core"), {"component": "gpu", "sensor": "core"})
+        if g.get("temp_hotspot"):
+            add_sample(lines, "thermal_temperature_celsius", g.get("temp_hotspot"), {"component": "gpu", "sensor": "hotspot"})
+        if g.get("temp_mem"):
+            add_sample(lines, "thermal_temperature_celsius", g.get("temp_mem"), {"component": "gpu", "sensor": "vram"})
+        if g.get("fan_pct"):
+            add_sample(lines, "thermal_fan_speed_percent", g.get("fan_pct"), {"component": "fan", "sensor": "gpu"})
+        if g.get("power_w"):
+            add_sample(lines, "thermal_gpu_power_watts", g.get("power_w"))
+
+    # Physical Disks Deduplication (prevent duplicate dials on dashboard)
+    seen_disks = set()
     for d in slow_cache.get("disk_temperatures", []):
-        add_sample(lines, "system_disk_temperature_celsius", d["temp"], {"disk": d["name"], "media": d["media"], "bus": d["bus"]})
-        add_sample(lines, "nvme_temperature_celsius", d["temp"], {"disk": d["name"]})
-        c_type = "nvme" if "nvme" in d["bus"].lower() or "nvme" in d["name"].lower() else "disk"
-        add_sample(lines, "thermal_temperature_celsius", d["temp"], {"component": c_type, "sensor": d["name"]})
+        d_name = d["name"]
+        if d_name in seen_disks:
+            continue
+        seen_disks.add(d_name)
+        add_sample(lines, "system_disk_temperature_celsius", d["temp"], {"disk": d_name, "media": d["media"], "bus": d["bus"]})
+        add_sample(lines, "nvme_temperature_celsius", d["temp"], {"disk": d_name})
+        c_type = "nvme" if "nvme" in d["bus"].lower() or "nvme" in d_name.lower() else "disk"
+        add_sample(lines, "thermal_temperature_celsius", d["temp"], {"component": c_type, "sensor": d_name})
+
+    for nv_name, nv_temp in hw.get("nvme_temps", {}).items():
+        if nv_name not in seen_disks:
+            seen_disks.add(nv_name)
+            add_sample(lines, "nvme_temperature_celsius", nv_temp, {"disk": nv_name})
+            add_sample(lines, "thermal_temperature_celsius", nv_temp, {"component": "nvme", "sensor": nv_name})
 
     # 4. System Resources (CPU, RAM, Pagefile, Disks, IO)
     sys_res = collect_system_resources()
@@ -1114,9 +1216,18 @@ def generate_prometheus_metrics():
 
     add_sample(lines, "net_nat_is_cgnat", slow_cache.get("cgnat", 0))
     add_sample(lines, "net_nat_is_double_nat", slow_cache.get("double_nat", 0))
+    add_sample(lines, "net_nat_is_symmetric", slow_cache.get("symmetric", 0))
     add_sample(lines, "net_tailscale_status", 1 if slow_cache.get("tailscale_online", 0) else 0)
     if slow_cache.get("gateway_ip"):
-        add_sample(lines, "net_gateway_info", 1, {"gateway": slow_cache["gateway_ip"]})
+        gw_ip = slow_cache["gateway_ip"]
+        gw_mac = slow_cache.get("gateway_mac", "-")
+        gw_iface = slow_cache.get("gateway_iface", "Ethernet")
+        add_sample(lines, "net_gateway_info", 1, {
+            "gateway": gw_ip,
+            "gateway_ip": gw_ip,
+            "gateway_mac": gw_mac,
+            "interface": gw_iface,
+        })
 
     # TCP States
     tcp_states, active_conns = collect_tcp_states_and_active()
@@ -1219,17 +1330,27 @@ def background_collector_loop():
                 slow_cache["cgnat"] = is_cg
                 slow_cache["double_nat"] = is_priv
 
-                # 3. Gateway & DNS
-                gw_ip, dns_ips = get_default_gateway_and_dns_windows()
+                # 3. Device Inventory (LAN + Tailscale)
+                device_inv = collect_device_inventory()
+                slow_cache["device_inventory"] = device_inv
+                slow_cache["tailscale_online"] = 1 if any(d["network"] == "Tailscale" for d in device_inv) else 0
+
+                # 4. Gateway & DNS & Gateway MAC
+                gw_ip, gw_iface, dns_ips = get_default_gateway_and_dns_windows()
                 slow_cache["gateway_ip"] = gw_ip or ""
+                slow_cache["gateway_iface"] = gw_iface or "Ethernet"
                 slow_cache["dns_servers"] = dns_ips
 
-                # 4. Physical Disks (NVMe / SSD)
-                slow_cache["disk_temperatures"] = collect_windows_disk_temperatures()
+                gw_mac = "-"
+                if gw_ip:
+                    for d in device_inv:
+                        if d.get("ip") == gw_ip and d.get("mac") != "-":
+                            gw_mac = d["mac"]
+                            break
+                slow_cache["gateway_mac"] = gw_mac
 
-                # 5. Device Inventory (LAN + Tailscale)
-                slow_cache["device_inventory"] = collect_device_inventory()
-                slow_cache["tailscale_online"] = 1 if any(d["network"] == "Tailscale" for d in slow_cache["device_inventory"]) else 0
+                # 5. Physical Disks (NVMe / SSD)
+                slow_cache["disk_temperatures"] = collect_windows_disk_temperatures()
 
                 # 6. Firewall settings
                 slow_cache["firewall_settings"] = collect_windows_firewall_settings()

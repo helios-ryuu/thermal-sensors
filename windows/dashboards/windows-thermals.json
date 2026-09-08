@@ -6,7 +6,56 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Crash Diagnostics",
+      "tooltip": "Windows Blackbox Crash Diagnostics & Flight Recorder",
+      "type": "link",
+      "url": "/d/windows-crash-diagnostics"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Hardware Thermals",
+      "tooltip": "Windows Hardware Thermals & Fan Speeds",
+      "type": "link",
+      "url": "/d/windows-thermals"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "System Resources",
+      "tooltip": "Windows System Health & Resources",
+      "type": "link",
+      "url": "/d/windows-system"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Network & Security",
+      "tooltip": "Windows Network & Security",
+      "type": "link",
+      "url": "/d/windows-network"
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
@@ -140,9 +189,9 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "gpu_hotspot_temperature_celsius",
+          "expr": "gpu_hotspot_temperature_celsius or nvidia_gpu_hotspot_temp_celsius",
           "instant": true,
-          "legendFormat": "{{gpu_name}} Hotspot",
+          "legendFormat": "GPU Hotspot",
           "refId": "A"
         }
       ],
@@ -204,9 +253,9 @@
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "expr": "gpu_memory_temperature_celsius",
+          "expr": "gpu_memory_temperature_celsius or nvidia_gpu_vram_temp_celsius",
           "instant": true,
-          "legendFormat": "{{gpu_name}} VRAM",
+          "legendFormat": "GPU VRAM",
           "refId": "A"
         }
       ],
@@ -476,8 +525,6 @@
           "color": {
             "mode": "thresholds"
           },
-          "max": 85,
-          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -507,6 +554,9 @@
       },
       "id": 8,
       "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -515,19 +565,18 @@
           "fields": "",
           "values": false
         },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "textMode": "value_and_name"
       },
       "targets": [
         {
-          "expr": "nvme_temperature_celsius or system_disk_temperature_celsius",
+          "expr": "nvme_temperature_celsius",
           "instant": true,
           "legendFormat": "{{disk}}",
           "refId": "A"
         }
       ],
       "title": "Nhi\u1ec7t \u0111\u1ed9 \u1ed4 c\u1ee9ng (NVMe / SSD)",
-      "type": "gauge"
+      "type": "stat"
     }
   ],
   "refresh": "5s",

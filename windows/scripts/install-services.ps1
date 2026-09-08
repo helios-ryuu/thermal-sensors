@@ -173,14 +173,37 @@ Register-Or-Update-Service `
     -StdoutPath (Join-Path $BaseDir "logs\grafana.log") `
     -StderrPath (Join-Path $BaseDir "logs\grafana.log")
 
-# 5. Service: WindowsLHM (Optional - for Motherboard 12V/5V/3.3V voltages and CPU Package Power)
-$LhmExe = Join-Path $BaseDir "bin\lhm\LibreHardwareMonitor.exe"
+# 5. Service: WindowsLHM (Motherboard 12V/5V/3.3V voltages, CPU Package Power, GPU Hotspot)
+$LhmDir = Join-Path $BaseDir "bin\lhm"
+$LhmExe = Join-Path $LhmDir "LibreHardwareMonitor.exe"
+if (!(Test-Path $LhmExe)) {
+    Write-Host "[DOWNLOAD] Fetching LibreHardwareMonitor portable for 12V voltage tracking..." -ForegroundColor Yellow
+    $LhmUrl = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases/download/v0.9.3/LibreHardwareMonitor-net472.zip"
+    try {
+        $lhmRel = Invoke-RestMethod -Uri "https://api.github.com/repos/LibreHardwareMonitor/LibreHardwareMonitor/releases/latest" -Headers @{"User-Agent"="PowerShell"} -TimeoutSec 6
+        $zipAsset = $lhmRel.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+        if ($zipAsset -and $zipAsset.browser_download_url) {
+            $LhmUrl = $zipAsset.browser_download_url
+        }
+    } catch {}
+    $ZipPath = Join-Path $BaseDir "bin\lhm.zip"
+    try {
+        Invoke-WebRequest -Uri $LhmUrl -OutFile $ZipPath -UseBasicParsing -TimeoutSec 60
+        New-Item -ItemType Directory -Force -Path $LhmDir | Out-Null
+        Expand-Archive -Path $ZipPath -DestinationPath $LhmDir -Force
+        Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
+        Write-Host "[OK] LibreHardwareMonitor setup complete in bin\lhm\" -ForegroundColor Green
+    } catch {
+        Write-Host "[WARN] Could not download LibreHardwareMonitor: $_" -ForegroundColor Yellow
+    }
+}
+
 if (Test-Path $LhmExe) {
     Register-Or-Update-Service `
         -ServiceName "WindowsLHM" `
         -AppPath $LhmExe `
         -AppParams "" `
-        -AppDir (Join-Path $BaseDir "bin\lhm") `
+        -AppDir $LhmDir `
         -StdoutPath (Join-Path $BaseDir "logs\lhm.log") `
         -StderrPath (Join-Path $BaseDir "logs\lhm.log")
 }

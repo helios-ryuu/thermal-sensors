@@ -3,19 +3,52 @@
   "graphTooltip": 1,
   "links": [
     {
-      "title": "iMac Thermal Sensors",
-      "type": "dashboard",
-      "url": "/d/imac-thermal"
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Crash Diagnostics",
+      "tooltip": "Windows Blackbox Crash Diagnostics & Flight Recorder",
+      "type": "link",
+      "url": "/d/windows-crash-diagnostics"
     },
     {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Hardware Thermals",
+      "tooltip": "Windows Hardware Thermals & Fan Speeds",
+      "type": "link",
+      "url": "/d/windows-thermals"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
       "title": "System Resources",
-      "type": "dashboard",
-      "url": "/d/system-resources"
+      "tooltip": "Windows System Health & Resources",
+      "type": "link",
+      "url": "/d/windows-system"
     },
     {
-      "title": "System Health",
-      "type": "dashboard",
-      "url": "/d/system-health"
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Network & Security",
+      "tooltip": "Windows Network & Security",
+      "type": "link",
+      "url": "/d/windows-network"
     }
   ],
   "panels": [
@@ -142,7 +175,6 @@
         {
           "expr": "net_nat_is_symmetric",
           "instant": true,
-          "legendFormat": "NAT Type",
           "refId": "A"
         }
       ],

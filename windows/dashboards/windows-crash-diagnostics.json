@@ -18,7 +18,56 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 2,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Crash Diagnostics",
+      "tooltip": "Windows Blackbox Crash Diagnostics & Flight Recorder",
+      "type": "link",
+      "url": "/d/windows-crash-diagnostics"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Hardware Thermals",
+      "tooltip": "Windows Hardware Thermals & Fan Speeds",
+      "type": "link",
+      "url": "/d/windows-thermals"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "System Resources",
+      "tooltip": "Windows System Health & Resources",
+      "type": "link",
+      "url": "/d/windows-system"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Network & Security",
+      "tooltip": "Windows Network & Security",
+      "type": "link",
+      "url": "/d/windows-network"
+    }
+  ],
   "liveNow": false,
   "panels": [
     {
