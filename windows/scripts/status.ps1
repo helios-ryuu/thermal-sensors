@@ -60,7 +60,8 @@ try {
     $t = $promTargets.data.activeTargets | Where-Object { $_.scrapeUrl -like "*9100*" } | Select-Object -First 1
     if ($t) {
         $hColor = if ($t.health -eq "up") { "Green" } else { "Red" }
-        Write-Host "  [PROMETHEUS] Target $($t.scrapeUrl) Health: $($t.health)" -ForegroundColor $hColor
+        $errInfo = if ($t.lastError) { " (Error: $($t.lastError))" } else { "" }
+        Write-Host "  [PROMETHEUS] Target $($t.scrapeUrl) Health: $($t.health)$errInfo" -ForegroundColor $hColor
     } else {
         Write-Host "  [PROMETHEUS] No target matching port 9100 found" -ForegroundColor Yellow
     }
@@ -114,9 +115,9 @@ if (Test-Path $AgentLog) {
     Write-Host "  (Log file not created yet)" -ForegroundColor Gray
 }
 
-$grafSvc = Get-Service -Name "WindowsGrafana" -ErrorAction SilentlyContinue
 $GrafLog = Join-Path $BaseDir "logs\grafana.log"
-if ($grafSvc -and $grafSvc.Status -ne "Running" -and (Test-Path $GrafLog)) {
+$p3000 = (Test-NetConnection -ComputerName 127.0.0.1 -Port 3000 -WarningAction SilentlyContinue).TcpTestSucceeded
+if (!$p3000 -and (Test-Path $GrafLog)) {
     Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray
     Write-Host "LATEST LOG FROM GRAFANA (logs\grafana.log):" -ForegroundColor Yellow
     Get-Content $GrafLog -Tail 15 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }

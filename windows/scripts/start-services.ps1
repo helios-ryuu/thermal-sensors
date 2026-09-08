@@ -24,6 +24,10 @@ foreach ($s in $Services) {
     }
 }
 
-Write-Host "`nVerifying network port connectivity..." -ForegroundColor Cyan
-Start-Sleep -Seconds 3
+Write-Host "`nWaiting for services to finish starting..." -ForegroundColor Cyan
+for ($i = 0; $i -lt 8; $i++) {
+    Start-Sleep -Seconds 1
+    $c = Test-NetConnection -ComputerName 127.0.0.1 -Port 3000 -WarningAction SilentlyContinue
+    if ($c.TcpTestSucceeded) { break }
+}
 & "$PSScriptRoot\status.ps1"
