@@ -221,9 +221,21 @@ New-Item -ItemType Directory -Force -Path $GrafDashDir | Out-Null
 Copy-Item -Path "$BaseDir\dashboards\*.json" -Destination $GrafDashDir -Force
 Write-Host "[CONFIG] Synchronized 4 Dashboards (Blackbox Crash, Thermals, System, Network) into Grafana." -ForegroundColor Green
 
-$GrafDb = Join-Path $BaseDir "data\grafana\grafana.db"
-if (Test-Path $GrafDb) {
-    Remove-Item $GrafDb -Force -ErrorAction SilentlyContinue
+$LocalCustomIni = Join-Path $BaseDir "config\grafana\conf\custom.ini"
+$GrafConfDir = Join-Path $GrafFinalDir "conf"
+if (Test-Path $LocalCustomIni) {
+    Copy-Item -Path $LocalCustomIni -Destination "$GrafConfDir\custom.ini" -Force
+    Write-Host "[CONFIG] Applied custom.ini (disabled slow plugin downloads, bound 0.0.0.0:3000)." -ForegroundColor Green
+}
+
+$GrafDbs = @(
+    (Join-Path $BaseDir "data\grafana\grafana.db"),
+    (Join-Path $GrafFinalDir "data\grafana.db")
+)
+foreach ($db in $GrafDbs) {
+    if (Test-Path $db) {
+        Remove-Item $db -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ==============================================================================

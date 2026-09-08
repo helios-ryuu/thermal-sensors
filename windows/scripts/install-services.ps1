@@ -126,26 +126,39 @@ New-Item -ItemType Directory -Force -Path $GrafDashDir | Out-Null
 Copy-Item -Path "$BaseDir\dashboards\*.json" -Destination $GrafDashDir -Force
 Write-Host "[CONFIG] Synchronized 4 Dashboards into bin\grafana\dashboards." -ForegroundColor Green
 
+$LocalCustomIni = Join-Path $BaseDir "config\grafana\conf\custom.ini"
+$GrafConfDir = Join-Path $GrafHome "conf"
+if (Test-Path $LocalCustomIni) {
+    Copy-Item -Path $LocalCustomIni -Destination "$GrafConfDir\custom.ini" -Force
+    Write-Host "[CONFIG] Applied custom.ini (disabled slow plugin downloads, bound 0.0.0.0:3000)." -ForegroundColor Green
+}
+
 # Clean stale SQLite database so Grafana recreates fresh with UID 'Prometheus'
-$GrafDb = Join-Path $BaseDir "data\grafana\grafana.db"
-if (Test-Path $GrafDb) {
-    try {
-        Stop-Service -Name "WindowsGrafana" -Force -ErrorAction SilentlyContinue
-        Remove-Item $GrafDb -Force -ErrorAction SilentlyContinue
-        Write-Host "[CONFIG] Re-initialized grafana.db to bind UID 'Prometheus' cleanly." -ForegroundColor Green
-    } catch {}
+$GrafDbs = @(
+    (Join-Path $BaseDir "data\grafana\grafana.db"),
+    (Join-Path $GrafHome "data\grafana.db")
+)
+foreach ($db in $GrafDbs) {
+    if (Test-Path $db) {
+        try {
+            Stop-Service -Name "WindowsGrafana" -Force -ErrorAction SilentlyContinue
+            Remove-Item $db -Force -ErrorAction SilentlyContinue
+            Write-Host "[CONFIG] Re-initialized $db to bind UID 'Prometheus' cleanly." -ForegroundColor Green
+        } catch {}
+    }
 }
 
 # 4. Service: WindowsGrafana
 $GrafExe = Join-Path $GrafHome "bin\grafana.exe"
-$GrafArgs = "server --homepath `"$GrafHome`""
+$CustomIniPath = Join-Path $GrafConfDir "custom.ini"
+$GrafArgs = "server --homepath `"$GrafHome`" --config `"$CustomIniPath`""
 
 if (!(Test-Path $GrafExe)) {
     # Fallback for older Grafana versions (< v13)
     $LegacyGrafExe = Join-Path $GrafHome "bin\grafana-server.exe"
     if (Test-Path $LegacyGrafExe) {
         $GrafExe = $LegacyGrafExe
-        $GrafArgs = "--homepath `"$GrafHome`""
+        $GrafArgs = "--homepath `"$GrafHome`" --config `"$CustomIniPath`""
     } else {
         Write-Host "[ERROR] Neither grafana.exe nor grafana-server.exe found in bin\grafana\bin!" -ForegroundColor Red
         exit 1
