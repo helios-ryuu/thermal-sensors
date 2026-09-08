@@ -17,6 +17,22 @@ if (!(Test-Path $NssmExe)) {
 # Tìm Python executable
 $PythonCmd = (Get-Command python.exe -ErrorAction SilentlyContinue).Source
 if (!$PythonCmd) {
+    $CommonPaths = @(
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+        "C:\Program Files\Python312\python.exe",
+        "C:\Program Files\Python311\python.exe",
+        "C:\Program Files\Python310\python.exe"
+    )
+    foreach ($p in $CommonPaths) {
+        if (Test-Path $p) {
+            $PythonCmd = $p
+            break
+        }
+    }
+}
+if (!$PythonCmd) {
     $PythonCmd = "python.exe"
 }
 
