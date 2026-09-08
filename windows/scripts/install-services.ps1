@@ -64,6 +64,7 @@ Write-Host "[INSTALL] Registering Service: $AgentService..." -ForegroundColor Ye
 & $NssmExe set $AgentService AppStderr (Join-Path $BaseDir "logs\agent.log")
 & $NssmExe set $AgentService AppRotateFiles 1
 & $NssmExe set $AgentService AppRotateBytes 10485760 # 10MB
+& $NssmExe set $AgentService AppEnvironmentExtra "PYTHONIOENCODING=utf-8"
 & $NssmExe set $AgentService Start SERVICE_AUTO_START
 
 # 2. Service: WindowsPrometheus
@@ -82,16 +83,41 @@ Write-Host "[INSTALL] Registering Service: $PromService..." -ForegroundColor Yel
 
 # 3. Service: WindowsGrafana
 $GrafService = "WindowsGrafana"
-$GrafExe = Join-Path $BaseDir "bin\grafana\bin\grafana-server.exe"
 $GrafHome = Join-Path $BaseDir "bin\grafana"
-$GrafArgs = "--homepath=`"$GrafHome`""
+$GrafExe = Join-Path $GrafHome "bin\grafana.exe"
+$GrafArgs = "server --homepath `"$GrafHome`""
 
-Write-Host "[INSTALL] Registering Service: $GrafService..." -ForegroundColor Yellow
+if (!(Test-Path $GrafExe)) {
+    # Fallback for older Grafana versions (< v13)
+    $LegacyGrafExe = Join-Path $GrafHome "bin\grafana-server.exe"
+    if (Test-Path $LegacyGrafExe) {
+        $GrafExe = $LegacyGrafExe
+        $GrafArgs = "--homepath `"$GrafHome`""
+    } else {
+        Write-Host "[ERROR] Neither grafana.exe nor grafana-server.exe found in bin\grafana\bin!" -ForegroundColor Red
+        exit 1
+    }
+}
+
+Write-Host "[INSTALL] Registering Service: $GrafService using $GrafExe..." -ForegroundColor Yellow
 & $NssmExe install $GrafService $GrafExe $GrafArgs
+& $NssmExe set $GrafService AppParameters $GrafArgs
 & $NssmExe set $GrafService AppDirectory $GrafHome
 & $NssmExe set $GrafService AppStdout (Join-Path $BaseDir "logs\grafana.log")
 & $NssmExe set $GrafService AppStderr (Join-Path $BaseDir "logs\grafana.log")
 & $NssmExe set $GrafService Start SERVICE_AUTO_START
+
+# 4. Firewall Inbound Rule for Tailscale / Remote access
+try {
+    $RuleName = "Monitoring Stack (Grafana 3000, Prometheus 9090, Agent 9100)"
+    $existing = Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue
+    if (!$existing) {
+        New-NetFirewallRule -DisplayName $RuleName -Direction Inbound -LocalPort 3000,9090,9100 -Protocol TCP -Action Allow -Profile Any | Out-Null
+        Write-Host "[FIREWALL] Opened Inbound TCP Ports 3000, 9090, 9100 for Tailscale/LAN." -ForegroundColor Green
+    }
+} catch {
+    Write-Host "[INFO] Firewall rule skipped (requires Admin rights, Tailscale can still route directly)." -ForegroundColor Gray
+}
 
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "  SUCCESSFULLY REGISTERED 3 WINDOWS SERVICES!            " -ForegroundColor Green

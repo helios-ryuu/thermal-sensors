@@ -154,8 +154,9 @@ if (!(Test-Path $PromExe)) {
 
 # B. Grafana Latest
 $GrafFinalDir = Join-Path $BinDir "grafana"
-$GrafExe = Join-Path $GrafFinalDir "bin\grafana-server.exe"
-if (!(Test-Path $GrafExe)) {
+$GrafExe = Join-Path $GrafFinalDir "bin\grafana.exe"
+$LegacyGrafExe = Join-Path $GrafFinalDir "bin\grafana-server.exe"
+if (!(Test-Path $GrafExe) -and !(Test-Path $LegacyGrafExe)) {
     $GrafUrl = "https://dl.grafana.com/oss/release/grafana-11.2.0.windows-amd64.zip"
     try {
         $grafRel = Invoke-RestMethod -Uri "https://api.github.com/repos/grafana/grafana/releases/latest" -Headers @{"User-Agent"="PowerShell"} -TimeoutSec 6

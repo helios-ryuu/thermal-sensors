@@ -40,6 +40,29 @@ foreach ($p in $Ports) {
     }
 }
 
+# Tailscale Remote Access Detection
+$tsIp = $null
+try {
+    $tsCmd = Get-Command tailscale.exe -ErrorAction SilentlyContinue
+    if ($tsCmd) {
+        $tsIp = (& $tsCmd.Source ip -4 2>$null).Trim()
+    }
+} catch {}
+if (!$tsIp) {
+    $tsAdapter = Get-NetIPAddress -InterfaceAlias "*tailscale*" -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($tsAdapter) {
+        $tsIp = $tsAdapter.IPAddress
+    }
+}
+
+if ($tsIp) {
+    Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray
+    Write-Host "TAILSCALE REMOTE ACCESS (IP: $tsIp):" -ForegroundColor Cyan
+    Write-Host "  Grafana Dashboard : http://$($tsIp):3000" -ForegroundColor Green
+    Write-Host "  Prometheus UI     : http://$($tsIp):9090" -ForegroundColor Green
+    Write-Host "  Agent Metrics     : http://$($tsIp):9100/metrics" -ForegroundColor Green
+}
+
 Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray
 Write-Host "LATEST LOG FROM AGENT (logs\agent.log):" -ForegroundColor Cyan
 $AgentLog = Join-Path $BaseDir "logs\agent.log"
@@ -47,5 +70,13 @@ if (Test-Path $AgentLog) {
     Get-Content $AgentLog -Tail 15 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
 } else {
     Write-Host "  (Log file not created yet)" -ForegroundColor Gray
+}
+
+$grafSvc = Get-Service -Name "WindowsGrafana" -ErrorAction SilentlyContinue
+$GrafLog = Join-Path $BaseDir "logs\grafana.log"
+if ($grafSvc -and $grafSvc.Status -ne "Running" -and (Test-Path $GrafLog)) {
+    Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray
+    Write-Host "LATEST LOG FROM GRAFANA (logs\grafana.log):" -ForegroundColor Yellow
+    Get-Content $GrafLog -Tail 15 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
 }
 Write-Host "==========================================================" -ForegroundColor Cyan

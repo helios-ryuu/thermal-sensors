@@ -18,6 +18,12 @@ import subprocess
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# Force UTF-8 on Windows console / NSSM service streams to prevent charmap/cp1252 UnicodeEncodeError
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Import thư viện bổ trợ nếu có
 try:
     import psutil
@@ -182,7 +188,7 @@ def query_windows_crash_events():
                 if abs(last_crash["epoch"] - boot_time) < 1800:
                     is_unexpected_boot = 1
     except Exception as e:
-        logging.warning(f"Lỗi khi đọc Event ID 41 từ Event Log: {e}")
+        logging.warning(f"Error reading Event ID 41 from Event Log: {e}")
 
     # Đếm số lỗi phần cứng WHEA trong 24h
     whea_cmd = [
@@ -221,7 +227,7 @@ def init_nvml():
             _nvml_initialized = True
             return True
         except Exception as e:
-            logging.debug(f"Không thể khởi tạo pynvml: {e}")
+            logging.debug(f"Could not initialize pynvml: {e}")
     return False
 
 
@@ -332,7 +338,7 @@ def collect_nvidia_gpu_metrics():
                     "clock_mem": clock_mem,
                 })
         except Exception as e:
-            logging.debug(f"Lỗi khi đọc NVML: {e}")
+            logging.debug(f"Error reading NVML: {e}")
 
     # Cách 2: Dự phòng qua nvidia-smi.exe nếu pynvml chưa có hoặc thiếu Hotspot
     if not gpus or any(g["temp_hotspot"] is None for g in gpus):
@@ -570,7 +576,7 @@ def collect_system_resources():
                 data["disk_read_bytes"] = dio.read_bytes
                 data["disk_write_bytes"] = dio.write_bytes
         except Exception as e:
-            logging.debug(f"Lỗi psutil: {e}")
+            logging.debug(f"psutil error: {e}")
 
     return data
 
@@ -732,7 +738,7 @@ def generate_prometheus_metrics():
 
     last_crash = slow_cache.get("last_crash_info", {})
     if last_crash:
-        lines.append("# HELP windows_last_crash_info Thong tin chi tiet ve lan sập nguon gan nhat")
+        lines.append("# HELP windows_last_crash_info Details about the most recent unexpected shutdown event")
         lines.append("# TYPE windows_last_crash_info gauge")
         add_sample(
             lines,
@@ -853,9 +859,9 @@ def generate_prometheus_metrics():
 # ==============================================================================
 
 def background_collector_loop():
-    """Worker chạy ngầm: cập nhật nhanh các chỉ số nhiệt/nguồn mỗi 5s, quét EventLog/Ping mỗi 60s."""
+    """Worker runs in background: fast poll thermals/watts/voltages every 5s, slow poll EventLog/Ping every 60s."""
     global metrics_output_text
-    logging.info(f"Khởi chạy Background Collector Loop (Fast: {FAST_INTERVAL}s, Slow: {SLOW_INTERVAL}s)")
+    logging.info(f"Starting Background Collector Loop (Fast: {FAST_INTERVAL}s, Slow: {SLOW_INTERVAL}s)")
 
     while True:
         try:
@@ -921,7 +927,7 @@ def background_collector_loop():
                 metrics_output_text = text
 
         except Exception as e:
-            logging.error(f"Lỗi trong vòng lặp collector: {e}", exc_info=True)
+            logging.error(f"Error in collector loop: {e}", exc_info=True)
 
         time.sleep(FAST_INTERVAL)
 
@@ -964,11 +970,11 @@ def run_agent_server():
     # 2. Khởi chạy HTTP Server trên port 9100
     server_addr = (BIND_IP, METRICS_PORT)
     httpd = HTTPServer(server_addr, MetricsHandler)
-    logging.info(f"Windows Monitoring Agent sẵn sàng lắng nghe tại http://{BIND_IP}:{METRICS_PORT}/metrics")
+    logging.info(f"Windows Monitoring Agent listening at http://{BIND_IP}:{METRICS_PORT}/metrics")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        logging.info("Dừng Agent theo yêu cầu người dùng.")
+        logging.info("Stopping Agent on request.")
     finally:
         httpd.server_close()
 
