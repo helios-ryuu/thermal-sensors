@@ -1,13 +1,12 @@
-<#
-.SYNOPSIS
-    Kiểm tra trạng thái hoạt động, cổng lắng nghe và log gần nhất của hệ thống giám sát.
-#>
+# ==============================================================================
+# Check Windows Monitoring Services Status and Logs
+# ==============================================================================
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BaseDir = Split-Path -Parent $ScriptDir
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  TRẠNG THÁI DỊCH VỤ GIÁM SÁT WINDOWS                     " -ForegroundColor Cyan
+Write-Host "  WINDOWS MONITORING SERVICES STATUS                     " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 $Services = @("WindowsThermalAgent", "WindowsPrometheus", "WindowsGrafana")
@@ -19,12 +18,12 @@ foreach ($s in $Services) {
         Write-Host "$($svc.Status)" -ForegroundColor $color
     } else {
         Write-Host "Service $s : " -NoNewline
-        Write-Host "CHƯA CÀI ĐẶT" -ForegroundColor Yellow
+        Write-Host "NOT INSTALLED" -ForegroundColor Yellow
     }
 }
 
 Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray
-Write-Host "KIỂM TRA CỔNG LẮNG NGHE:" -ForegroundColor Cyan
+Write-Host "CHECKING LISTENING PORTS:" -ForegroundColor Cyan
 
 $Ports = @(
     @{ Name = "Agent Metrics"; Port = 9100; Url = "http://127.0.0.1:9100/metrics" },
@@ -37,17 +36,16 @@ foreach ($p in $Ports) {
     if ($conn.TcpTestSucceeded) {
         Write-Host "  [ONLINE] Port $($p.Port) ($($p.Name)) -> $($p.Url)" -ForegroundColor Green
     } else {
-        Write-Host "  [OFFLINE] Port $($p.Port) ($($p.Name)) chưa sẵn sàng" -ForegroundColor Red
+        Write-Host "  [OFFLINE] Port $($p.Port) ($($p.Name)) not reachable yet" -ForegroundColor Red
     }
 }
 
 Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray
-Write-Host "LOG MỚI NHẤT TỪ AGENT (logs\agent.log):" -ForegroundColor Cyan
+Write-Host "LATEST LOG FROM AGENT (logs\agent.log):" -ForegroundColor Cyan
 $AgentLog = Join-Path $BaseDir "logs\agent.log"
 if (Test-Path $AgentLog) {
     Get-Content $AgentLog -Tail 15 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
 } else {
-    Write-Host "  (Chưa có file log)" -ForegroundColor Gray
+    Write-Host "  (Log file not created yet)" -ForegroundColor Gray
 }
 Write-Host "==========================================================" -ForegroundColor Cyan
-

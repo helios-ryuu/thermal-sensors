@@ -1,17 +1,15 @@
-<#
-.SYNOPSIS
-    Dừng đồng thời 3 dịch vụ giám sát Windows.
-#>
+# ==============================================================================
+# Stop Windows Monitoring Services
+# ==============================================================================
 
 $Services = @("WindowsGrafana", "WindowsPrometheus", "WindowsThermalAgent")
 
-Write-Host "Đang dừng các dịch vụ giám sát..." -ForegroundColor Cyan
+Write-Host "Stopping monitoring services..." -ForegroundColor Cyan
 foreach ($s in $Services) {
     try {
         Stop-Service -Name $s -Force -ErrorAction SilentlyContinue
-        Write-Host "  [STOPPED] Đã dừng: $s" -ForegroundColor Yellow
+        Write-Host "  [STOPPED] Stopped: $s" -ForegroundColor Yellow
     } catch {
-        Write-Host "  [INFO] $s đã dừng hoặc chưa chạy." -ForegroundColor Gray
+        Write-Host "  [INFO] $s is already stopped or not installed." -ForegroundColor Gray
     }
 }
-
