@@ -1,0 +1,14 @@
+apiVersion: 1
+
+providers:
+  - name: 'Windows Dashboards'
+    orgId: 1
+    folder: 'Windows PC'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: ./dashboards
+

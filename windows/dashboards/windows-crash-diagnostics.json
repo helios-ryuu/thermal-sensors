@@ -1,0 +1,835 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 2,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "Hộp đen Chẩn đoán Sập nguồn (Post-Mortem Status Cards)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "green",
+                  "text": "CLEAN BOOT (Tắt máy bình thường)"
+                },
+                "1": {
+                  "color": "red",
+                  "text": "SẬP NGUỒN ĐỘT NGỘT (Event ID 41)"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "windows_last_reboot_unexpected",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Trạng thái Khởi động Lần gần nhất",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "name"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "windows_last_crash_info",
+          "instant": true,
+          "legendFormat": "{{bugcheck_hex}} ({{bugcheck_name}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Mã BugCheck / StopCode Gần nhất",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "name"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "windows_last_crash_info",
+          "instant": true,
+          "legendFormat": "{{bugcheck_desc}} (Vào lúc {{time}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Nhận diện Nguyên nhân Khả dĩ nhất",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "windows_whea_errors_total",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Lỗi Phần cứng WHEA (24h)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 200,
+      "title": "Khảo sát Nguồn & Sụt áp Điện áp (PSU Health - Nguyên nhân #1 gây sập tải nặng)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Đường điện áp 12V cấp cho GPU và CPU VRM. Chuẩn ATX quy định: 11.40V - 12.60V. Nếu đường 12V rơi xuống dưới 11.40V khi chơi game/render, nguồn PSU bị quá tải tụ gây sập ngay lập tức.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "lineWidth": 3,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "max": 12.8,
+          "min": 11.0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 11.4
+              },
+              {
+                "color": "green",
+                "value": 11.7
+              },
+              {
+                "color": "yellow",
+                "value": 12.4
+              },
+              {
+                "color": "red",
+                "value": 12.6
+              }
+            ]
+          },
+          "unit": "volt"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "min",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "motherboard_voltage_volts{rail=\"12v\"}",
+          "legendFormat": "Đường 12V (Chuẩn an toàn: 11.4V - 12.6V)",
+          "refId": "A"
+        }
+      ],
+      "title": "Độ ổn định Điện áp Đường 12V (PSU 12V Rail Drop)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Đường 5V cấp cho cổng USB/SSD và 3.3V cấp cho chipset bo mạch chủ.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "volt"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "min",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "motherboard_voltage_volts{rail=~\"5v|3.3v\"}",
+          "legendFormat": "Đường {{rail}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Điện áp Đường 5V & 3.3V",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "So sánh công suất tiêu thụ thực tế của GPU và CPU (Watts) so với ngưỡng giới hạn Power Limit. Nếu tổng công suất vượt công suất danh định của nguồn PSU, bộ nguồn sẽ kích hoạt bảo vệ quá dòng (OCP).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2
+          },
+          "unit": "watt"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tổng GPU + CPU Watts"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "gpu_power_draw_watts",
+          "legendFormat": "GPU Power Draw (Watts)",
+          "refId": "A"
+        },
+        {
+          "expr": "gpu_power_limit_watts",
+          "legendFormat": "GPU Power Limit (Watts)",
+          "refId": "B"
+        },
+        {
+          "expr": "cpu_package_power_watts",
+          "legendFormat": "CPU Package Power (Watts)",
+          "refId": "C"
+        },
+        {
+          "expr": "gpu_power_draw_watts + on() cpu_package_power_watts",
+          "legendFormat": "Tổng GPU + CPU Watts",
+          "refId": "D"
+        }
+      ],
+      "title": "Công suất Tải đỉnh Tức thời (Transient Power Spikes - Watts)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 300,
+      "title": "Khảo sát Nhiệt độ Điểm nóng GPU & Ngắt nhiệt CPU (Thermal Trip)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Nhiệt độ Core, Hotspot và VRAM của GPU NVIDIA. Ngưỡng ngắt bảo vệ của Hotspot thường là 105°C - 110°C.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 85
+              },
+              {
+                "color": "orange",
+                "value": 95
+              },
+              {
+                "color": "red",
+                "value": 105
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GPU Hotspot Temp"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "gpu_temperature_celsius",
+          "legendFormat": "GPU Core Temp",
+          "refId": "A"
+        },
+        {
+          "expr": "gpu_hotspot_temperature_celsius",
+          "legendFormat": "GPU Hotspot Temp",
+          "refId": "B"
+        },
+        {
+          "expr": "gpu_memory_temperature_celsius",
+          "legendFormat": "GPU VRAM Memory Temp",
+          "refId": "C"
+        }
+      ],
+      "title": "Nhiệt độ GPU (Core vs Hotspot vs VRAM)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Độ chênh lệch Delta = Hotspot - Core. Bình thường dao động 10 - 15°C. Nếu Delta > 25°C - 30°C, keo tản nhiệt GPU bị khô/bơm ra ngoài, nhiệt độ không thoát được gây sập máy.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 18
+              },
+              {
+                "color": "red",
+                "value": 25
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "gpu_hotspot_delta_celsius",
+          "legendFormat": "Delta Hotspot - Core (°C)",
+          "refId": "A"
+        }
+      ],
+      "title": "Chênh lệch Điểm nóng GPU Delta (Cảnh báo khô keo tản nhiệt)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Nhiệt độ CPU Package so với ngưỡng ngắt bảo vệ phần cứng TjMax (thường là 100°C - 105°C) và nhiệt độ ổ cứng NVMe.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 85
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "cpu_package_temperature_celsius",
+          "legendFormat": "CPU Package Temp",
+          "refId": "A"
+        },
+        {
+          "expr": "nvme_temperature_celsius",
+          "legendFormat": "{{disk}} Temp",
+          "refId": "B"
+        }
+      ],
+      "title": "Nhiệt độ CPU Package & Ổ cứng NVMe",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 400,
+      "title": "Bảng Lịch sử Khám nghiệm Sự kiện Sập nguồn (Event ID 41 Table)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "description": "Bảng ghi nhận toàn bộ các lần Windows bị ngắt nguồn bất ngờ trích xuất từ Microsoft-Windows-Kernel-Power Event Log.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 12,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "expr": "windows_crash_events_total",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Chi tiết Nhật ký Lỗi Tắt nguồn Bất thường (Kernel-Power Event 41)",
+      "type": "table"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "windows",
+    "crash",
+    "diagnostics",
+    "blackbox",
+    "thermal"
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "2s",
+      "5s",
+      "10s",
+      "30s"
+    ]
+  },
+  "timezone": "browser",
+  "title": "Windows - Blackbox Crash Diagnostics & Flight Recorder",
+  "uid": "windows-crash-diagnostics",
+  "version": 1
+}
+
