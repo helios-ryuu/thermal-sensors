@@ -105,7 +105,7 @@ if (!$HasRealPython) {
     if ($RealPyExe) {
         $newDir = Split-Path -Parent $RealPyExe
         $env:Path = "$newDir;$newDir\Scripts;" + $env:Path
-        Write-Host "[OK] Successfully installed Python $LatestPyVer: $RealPyExe" -ForegroundColor Green
+        Write-Host "[OK] Successfully installed Python $LatestPyVer - $RealPyExe" -ForegroundColor Green
     } else {
         Write-Host "[WARN] Python installed, but python.exe could not be located." -ForegroundColor Yellow
     }
