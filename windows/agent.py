@@ -710,11 +710,18 @@ def get_public_ip_and_isp():
 # 6. ĐÓNG GÓI CHUẨN PROMETHEUS TEXT EXPOSITION
 # ==============================================================================
 
+def escape_label_value(val):
+    if val is None:
+        return ""
+    # In Prometheus exposition format, \, ", and \n must be escaped
+    return str(val).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
 def add_sample(lines, name, val, labels=None):
     if val is None:
         return
     if labels:
-        label_str = ",".join(f'{k}="{v}"' for k, v in sorted(labels.items()))
+        label_str = ",".join(f'{k}="{escape_label_value(v)}"' for k, v in sorted(labels.items()))
         lines.append(f"{name}{{{label_str}}} {val}")
     else:
         lines.append(f"{name} {val}")
@@ -808,7 +815,8 @@ def generate_prometheus_metrics():
     add_sample(lines, "system_uptime_seconds", sys_res.get("uptime_sec"))
 
     for d in sys_res.get("disks", []):
-        d_lbl = {"drive": d["mountpoint"], "fstype": d["fstype"]}
+        mount_clean = d["mountpoint"].rstrip("\\") if d["mountpoint"] else d["mountpoint"]
+        d_lbl = {"drive": mount_clean, "fstype": d["fstype"]}
         add_sample(lines, "system_disk_used_bytes", d["used"], d_lbl)
         add_sample(lines, "system_disk_total_bytes", d["total"], d_lbl)
         add_sample(lines, "system_disk_utilization_percent", d["percent"], d_lbl)

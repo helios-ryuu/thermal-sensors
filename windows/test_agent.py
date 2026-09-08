@@ -142,7 +142,7 @@ Thời gian khứ hồi xấp xỉ tính bằng mili giây:
                     self.assertIn("cpu_package_power_watts 95.0", metrics)
                     self.assertIn("cpu_package_temperature_celsius 68.5", metrics)
                     self.assertIn('nvme_temperature_celsius{disk="Samsung 980 Pro"} 45.0', metrics)
-                    self.assertIn('system_disk_utilization_percent{drive="C:\\",fstype="NTFS"} 40.0', metrics)
+                    self.assertIn('system_disk_utilization_percent{drive="C:",fstype="NTFS"} 40.0', metrics)
                     self.assertIn('net_ping_latency_ms{category="local_network",service="Gateway",target="gateway"} 0.8', metrics)
                     self.assertIn('net_ping_latency_ms{category="global_dns",service="Cloudflare (1.1.1.1)",target="cloudflare"} 38.5', metrics)
 
