@@ -89,16 +89,6 @@ function Register-Or-Update-Service {
 }
 
 # 1. Service: WindowsThermalAgent
-$AgentService = "WindowsThermalAgent"
-Write-Host "[INSTALL] Registering Service: $AgentService..." -ForegroundColor Yellow
-& $NssmExe install $AgentService $PythonCmd (Join-Path $BaseDir "agent.py")
-& $NssmExe set $AgentService AppDirectory $BaseDir
-& $NssmExe set $AgentService AppStdout (Join-Path $BaseDir "logs\agent.log")
-& $NssmExe set $AgentService AppStderr (Join-Path $BaseDir "logs\agent.log")
-& $NssmExe set $AgentService AppRotateFiles 1
-& $NssmExe set $AgentService AppRotateBytes 10485760 # 10MB
-& $NssmExe set $AgentService AppEnvironmentExtra "PYTHONIOENCODING=utf-8"
-& $NssmExe set $AgentService Start SERVICE_AUTO_START
 Register-Or-Update-Service `
     -ServiceName "WindowsThermalAgent" `
     -AppPath $PythonCmd `
@@ -109,18 +99,11 @@ Register-Or-Update-Service `
     -EnvExtra "PYTHONIOENCODING=utf-8"
 
 # 2. Service: WindowsPrometheus
-$PromService = "WindowsPrometheus"
 $PromExe = Join-Path $BaseDir "bin\prometheus\prometheus.exe"
 $PromCfg = Join-Path $BaseDir "config\prometheus.yml"
 $PromData = Join-Path $BaseDir "data\prometheus"
 $PromArgs = "--config.file=`"$PromCfg`" --storage.tsdb.path=`"$PromData`" --storage.tsdb.retention.time=30d --web.listen-address=`"0.0.0.0:9090`""
 
-Write-Host "[INSTALL] Registering Service: $PromService..." -ForegroundColor Yellow
-& $NssmExe install $PromService $PromExe $PromArgs
-& $NssmExe set $PromService AppDirectory (Join-Path $BaseDir "bin\prometheus")
-& $NssmExe set $PromService AppStdout (Join-Path $BaseDir "logs\prometheus.log")
-& $NssmExe set $PromService AppStderr (Join-Path $BaseDir "logs\prometheus.log")
-& $NssmExe set $PromService Start SERVICE_AUTO_START
 Register-Or-Update-Service `
     -ServiceName "WindowsPrometheus" `
     -AppPath $PromExe `
@@ -130,7 +113,6 @@ Register-Or-Update-Service `
     -StderrPath (Join-Path $BaseDir "logs\prometheus.log")
 
 # 3. Service: WindowsGrafana
-$GrafService = "WindowsGrafana"
 $GrafHome = Join-Path $BaseDir "bin\grafana"
 $GrafExe = Join-Path $GrafHome "bin\grafana.exe"
 $GrafArgs = "server --homepath `"$GrafHome`""
@@ -147,13 +129,6 @@ if (!(Test-Path $GrafExe)) {
     }
 }
 
-Write-Host "[INSTALL] Registering Service: $GrafService using $GrafExe..." -ForegroundColor Yellow
-& $NssmExe install $GrafService $GrafExe $GrafArgs
-& $NssmExe set $GrafService AppParameters $GrafArgs
-& $NssmExe set $GrafService AppDirectory $GrafHome
-& $NssmExe set $GrafService AppStdout (Join-Path $BaseDir "logs\grafana.log")
-& $NssmExe set $GrafService AppStderr (Join-Path $BaseDir "logs\grafana.log")
-& $NssmExe set $GrafService Start SERVICE_AUTO_START
 Register-Or-Update-Service `
     -ServiceName "WindowsGrafana" `
     -AppPath $GrafExe `
