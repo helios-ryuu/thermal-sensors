@@ -9,8 +9,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Crash Diagnostics",
-      "tooltip": "Windows Blackbox Crash Diagnostics & Flight Recorder",
+      "title": "Chẩn đoán Sự cố",
+      "tooltip": "Hộp đen chẩn đoán sập nguồn & ghi dữ liệu sự cố Windows",
       "type": "link",
       "url": "/d/windows-crash-diagnostics"
     },
@@ -21,8 +21,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Hardware Thermals",
-      "tooltip": "Windows Hardware Thermals & Fan Speeds",
+      "title": "Nhiệt độ & Quạt",
+      "tooltip": "Nhiệt độ phần cứng (CPU, GPU, NVMe) và tốc độ quạt",
       "type": "link",
       "url": "/d/windows-thermals"
     },
@@ -33,8 +33,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "System Resources",
-      "tooltip": "Windows System Health & Resources",
+      "title": "Tài nguyên Hệ thống",
+      "tooltip": "Tài nguyên hệ thống (CPU, RAM, Pagefile, Disk I/O, Network)",
       "type": "link",
       "url": "/d/windows-system"
     },
@@ -45,8 +45,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Network & Security",
-      "tooltip": "Windows Network & Security",
+      "title": "Mạng & An ninh",
+      "tooltip": "Trạng thái mạng, cổng dịch vụ, tường lửa và thiết bị LAN/Tailscale",
       "type": "link",
       "url": "/d/windows-network"
     }
@@ -57,7 +57,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Carrier-Grade NAT (CGNAT) detection. Green = Direct Public IP, Yellow = Behind ISP CGNAT (100.64.0.0/10).",
+      "description": "Nhận diện CGNAT từ nhà mạng ISP. Xanh lá = IP Công cộng Trực tiếp, Vàng = Phía sau dải mạng CGNAT (100.64.0.0/10).",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -65,11 +65,11 @@
               "options": {
                 "0": {
                   "color": "green",
-                  "text": "Public Direct (No CGNAT)"
+                  "text": "IP Công cộng Trực tiếp (Không CGNAT)"
                 },
                 "1": {
                   "color": "yellow",
-                  "text": "Behind CGNAT (100.64.0.0/10)"
+                  "text": "Phía sau CGNAT Nhà mạng (100.64.0.0/10)"
                 }
               },
               "type": "value"
@@ -114,7 +114,7 @@
           "refId": "A"
         }
       ],
-      "title": "CGNAT Status",
+      "title": "Trạng thái CGNAT (Nhà mạng)",
       "type": "stat"
     },
     {
@@ -122,7 +122,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "NAT Traversal Behavior. Green = Cone NAT (Direct P2P Friendly), Yellow = Symmetric NAT (Relay Required).",
+      "description": "Khả năng duyệt NAT cho kết nối P2P. Xanh lá = Cone NAT (Tối ưu P2P), Vàng = Symmetric NAT (Cần máy chủ Relay).",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -130,11 +130,11 @@
               "options": {
                 "0": {
                   "color": "green",
-                  "text": "Cone NAT (P2P Friendly)"
+                  "text": "Full-Cone / Giới hạn Cổng (Tối ưu P2P)"
                 },
                 "1": {
                   "color": "yellow",
-                  "text": "Symmetric NAT (Relay Required)"
+                  "text": "Symmetric NAT (Cần máy chủ Relay)"
                 }
               },
               "type": "value"
@@ -178,7 +178,7 @@
           "refId": "A"
         }
       ],
-      "title": "NAT Traversal Type",
+      "title": "Kiểu NAT & Khả năng Xuyên NAT",
       "type": "stat"
     },
     {
@@ -186,7 +186,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Double NAT detection via hop traceroute. Green = Single NAT (Optimal), Orange = Multi-layer Router Detected.",
+      "description": "Phát hiện Router đa tầng qua traceroute. Xanh lá = Mạng 1 Lớp NAT (Tối ưu), Cam = Phát hiện nhiều router trung gian.",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -194,11 +194,11 @@
               "options": {
                 "0": {
                   "color": "green",
-                  "text": "Single NAT (Optimal)"
+                  "text": "Mạng 1 Lớp NAT (Tối ưu)"
                 },
                 "1": {
                   "color": "orange",
-                  "text": "Double NAT Detected"
+                  "text": "Phát hiện Lớp mạng Kép (Double NAT)"
                 }
               },
               "type": "value"
@@ -243,7 +243,7 @@
           "refId": "A"
         }
       ],
-      "title": "Double NAT Detection",
+      "title": "Phát hiện Lớp mạng Kép (Double NAT)",
       "type": "stat"
     },
     {
@@ -251,7 +251,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Tailscale Mesh VPN daemon connection state on iMac.",
+      "description": "Trạng thái kết nối dịch vụ mạng riêng ảo Tailscale Mesh trên máy tính Windows.",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -259,11 +259,11 @@
               "options": {
                 "0": {
                   "color": "red",
-                  "text": "Tailscale Offline"
+                  "text": "Tailscale Ngoại tuyến (Offline)"
                 },
                 "1": {
                   "color": "green",
-                  "text": "Tailscale Online"
+                  "text": "Tailscale Trực tuyến (Online)"
                 }
               },
               "type": "value"
@@ -308,7 +308,7 @@
           "refId": "A"
         }
       ],
-      "title": "Tailscale Mesh VPN",
+      "title": "Mạng ảo Tailscale Mesh VPN",
       "type": "stat"
     },
     {
@@ -316,7 +316,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Default gateway router IP, hardware MAC address and interface.",
+      "description": "Địa chỉ IP, địa chỉ MAC phần cứng và tên card mạng kết nối tới router gateway.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -359,11 +359,11 @@
         {
           "expr": "net_gateway_info",
           "instant": true,
-          "legendFormat": "{{gateway_ip}} \u2022 {{gateway_mac}} ({{interface}})",
+          "legendFormat": "{{gateway_ip}} • {{gateway_mac}} ({{interface}})",
           "refId": "A"
         }
       ],
-      "title": "Default Gateway Router",
+      "title": "Router Cổng Mặc định (Default Gateway)",
       "type": "stat"
     },
     {
@@ -371,7 +371,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Public IPv4 address and detected Internet Service Provider (ISP). Blue card with large clear font.",
+      "description": "Địa chỉ IPv4 bên ngoài và tên nhà cung cấp dịch vụ Internet (ISP).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -414,11 +414,11 @@
         {
           "expr": "net_wan_info",
           "instant": true,
-          "legendFormat": "{{public_ipv4}} \u2022 {{isp}}",
+          "legendFormat": "{{public_ipv4}} • {{isp}}",
           "refId": "A"
         }
       ],
-      "title": "Public IPv4 & ISP",
+      "title": "Địa chỉ IPv4 Công cộng & Nhà mạng ISP",
       "type": "stat"
     },
     {
@@ -426,7 +426,7 @@
         "type": "prometheus",
         "uid": "Prometheus"
       },
-      "description": "Public IPv6 Global Unicast Address. Wide 14-grid card to display the full 39-character IPv6 in large legible text.",
+      "description": "Địa chỉ IPv6 Global Unicast Address công cộng.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -473,7 +473,7 @@
           "refId": "A"
         }
       ],
-      "title": "Public IPv6 Address",
+      "title": "Địa chỉ IPv6 Công cộng",
       "type": "stat"
     },
     {
@@ -485,7 +485,7 @@
         "y": 8
       },
       "id": 100,
-      "title": "Network Quality & Latency Gauges",
+      "title": "Đồng hồ Đo Độ trễ Mạng (Ping Latencies)",
       "type": "row"
     },
     {
@@ -615,7 +615,7 @@
           "refId": "A"
         }
       ],
-      "title": "Latency Dials (Gateway / DNS / WAN / Services)",
+      "title": "Độ trễ Mạng Nội bộ & Gateway",
       "type": "gauge"
     },
     {
@@ -718,7 +718,7 @@
           "refId": "A"
         }
       ],
-      "title": "Network Latency History",
+      "title": "Độ trễ DNS Trong nước (Việt Nam)",
       "type": "timeseries"
     },
     {
@@ -730,7 +730,7 @@
         "y": 17
       },
       "id": 101,
-      "title": "Network Topology & Interfaces",
+      "title": "Tổng quan Trạng thái Mạng & Tô-pô",
       "type": "row"
     },
     {
@@ -876,7 +876,7 @@
           "refId": "A"
         }
       ],
-      "title": "Interface Types Distribution",
+      "title": "Độ trễ Dịch vụ Đám mây & Gaming Quốc tế",
       "type": "bargauge"
     },
     {
@@ -1156,7 +1156,7 @@
         "y": 26
       },
       "id": 102,
-      "title": "Device Inventory (LAN & Tailscale)",
+      "title": "Danh mục Thiết bị Mạng Hợp nhất (LAN & Tailscale)",
       "type": "row"
     },
     {
@@ -1721,21 +1721,20 @@
           "refId": "A"
         }
       ],
-      "title": "Unified Device Inventory (LAN & Tailscale)",
+      "title": "Danh sách Thiết bị trong Mạng (LAN + Tailscale)",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "renameByName": {
-              "network": "Network",
-              "name": "Device Name",
-              "ip": "IP Address",
-              "device_type": "Device Profile",
-              "services": "Detected Services",
-              "vendor": "Hardware Vendor",
-              "identifier": "Identifier (MAC / OS)",
-              "status": "Status",
-              "link_type": "Link Type"
+              "hostname": "Tên thiết bị (Host)",
+              "ip": "Địa chỉ IP",
+              "mac": "Địa chỉ MAC",
+              "vendor": "Nhà sản xuất / Card",
+              "network": "Phân vùng Mạng",
+              "os": "Hệ điều hành",
+              "status": "Trạng thái",
+              "latency": "Độ trễ (Ping)"
             },
             "excludeByName": {
               "Time": true,
@@ -1769,7 +1768,7 @@
         "y": 42
       },
       "id": 103,
-      "title": "Ports & Active Connections",
+      "title": "Cổng Dịch vụ & Kết nối Đang Hoạt động",
       "type": "row"
     },
     {
@@ -1925,17 +1924,16 @@
           "refId": "A"
         }
       ],
-      "title": "Open Listening Ports",
+      "title": "Cổng Dịch vụ Đang Mở (Listening Ports)",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "renameByName": {
-              "port": "Port",
-              "proto": "Protocol",
-              "bind_ip": "Bind IP",
-              "exposure": "Exposure",
-              "service": "Service / Process"
+              "exposure": "Phạm vi Lắng nghe",
+              "port": "Cổng (Port)",
+              "process": "Tiến trình (Process)",
+              "proto": "Giao thức"
             },
             "excludeByName": {
               "Time": true,
@@ -2121,17 +2119,16 @@
           "refId": "A"
         }
       ],
-      "title": "Active Established Connections",
+      "title": "Kết nối TCP Đang Hoạt động (Established Connections)",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "renameByName": {
-              "proto": "Proto",
-              "local_port": "Local Port",
-              "remote_ip": "Remote IP",
-              "remote_port": "Remote Port",
-              "state": "State"
+              "local_addr": "Địa chỉ Nội bộ",
+              "process": "Tiến trình (Process)",
+              "proto": "Giao thức",
+              "remote_addr": "Địa chỉ Đích (Remote)"
             },
             "excludeByName": {
               "Time": true,
@@ -2154,7 +2151,7 @@
         "y": 52
       },
       "id": 104,
-      "title": "Firewall & Traffic Filtering",
+      "title": "Tường lửa & Lọc Lưu lượng Mạng",
       "type": "row"
     },
     {
@@ -2331,27 +2328,22 @@
           "refId": "A"
         }
       ],
-      "title": "Windows Firewall Profiles & Security Settings",
+      "title": "Cấu hình Tường lửa Windows (Windows Firewall Profiles)",
       "transformations": [
         {
           "id": "organize",
           "options": {
-            "renameByName": {
-              "chain": "Chain",
-              "target": "Action",
-              "proto": "Proto",
-              "source": "Source",
-              "dest": "Destination",
-              "packets": "Packets",
-              "bytes": "Bytes",
-              "extra": "Match Criteria"
-            },
             "excludeByName": {
               "Time": true,
               "__name__": true,
               "instance": true,
               "job": true,
+              "setting": true,
               "Value": true
+            },
+            "renameByName": {
+              "profile": "Hồ sơ Tường lửa (Profile)",
+              "status": "Trạng thái Bảo vệ"
             }
           }
         }
@@ -2376,7 +2368,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Windows - Network & Security",
+  "title": "Windows - Mạng & An ninh Bảo mật",
   "uid": "windows-network",
   "version": 5
 }

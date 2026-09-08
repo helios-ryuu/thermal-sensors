@@ -14,8 +14,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Crash Diagnostics",
-      "tooltip": "Windows Blackbox Crash Diagnostics & Flight Recorder",
+      "title": "Chẩn đoán Sự cố",
+      "tooltip": "Hộp đen chẩn đoán sập nguồn & ghi dữ liệu sự cố Windows",
       "type": "link",
       "url": "/d/windows-crash-diagnostics"
     },
@@ -26,8 +26,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Hardware Thermals",
-      "tooltip": "Windows Hardware Thermals & Fan Speeds",
+      "title": "Nhiệt độ & Quạt",
+      "tooltip": "Nhiệt độ phần cứng (CPU, GPU, NVMe) và tốc độ quạt",
       "type": "link",
       "url": "/d/windows-thermals"
     },
@@ -38,8 +38,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "System Resources",
-      "tooltip": "Windows System Health & Resources",
+      "title": "Tài nguyên Hệ thống",
+      "tooltip": "Tài nguyên hệ thống (CPU, RAM, Pagefile, Disk I/O, Network)",
       "type": "link",
       "url": "/d/windows-system"
     },
@@ -50,8 +50,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Network & Security",
-      "tooltip": "Windows Network & Security",
+      "title": "Mạng & An ninh",
+      "tooltip": "Trạng thái mạng, cổng dịch vụ, tường lửa và thiết bị LAN/Tailscale",
       "type": "link",
       "url": "/d/windows-network"
     }
@@ -67,7 +67,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "Nhi\u1ec7t \u0111\u1ed9 & Qu\u1ea1t Card \u0110\u1ed3 h\u1ecda NVIDIA",
+      "title": "Nhiệt độ & Quạt Card Đồ họa NVIDIA",
       "type": "row"
     },
     {
@@ -127,11 +127,11 @@
         {
           "expr": "gpu_temperature_celsius",
           "instant": true,
-          "legendFormat": "{{gpu_name}} Core",
+          "legendFormat": "Nhân GPU (Core)",
           "refId": "A"
         }
       ],
-      "title": "GPU Core Temp",
+      "title": "Nhiệt độ Nhân GPU (Core)",
       "type": "gauge"
     },
     {
@@ -191,11 +191,11 @@
         {
           "expr": "gpu_hotspot_temperature_celsius or nvidia_gpu_hotspot_temp_celsius",
           "instant": true,
-          "legendFormat": "GPU Hotspot",
+          "legendFormat": "Điểm nóng GPU (Hotspot)",
           "refId": "A"
         }
       ],
-      "title": "GPU Hotspot Temp",
+      "title": "Nhiệt độ Điểm nóng GPU (Hotspot)",
       "type": "gauge"
     },
     {
@@ -255,11 +255,11 @@
         {
           "expr": "gpu_memory_temperature_celsius or nvidia_gpu_vram_temp_celsius",
           "instant": true,
-          "legendFormat": "GPU VRAM",
+          "legendFormat": "Bộ nhớ VRAM GPU",
           "refId": "A"
         }
       ],
-      "title": "GPU VRAM Temp",
+      "title": "Nhiệt độ Bộ nhớ VRAM GPU",
       "type": "gauge"
     },
     {
@@ -323,11 +323,11 @@
         {
           "expr": "gpu_fan_speed_percent",
           "instant": true,
-          "legendFormat": "{{gpu_name}} Fan %",
+          "legendFormat": "Quạt GPU (%)",
           "refId": "A"
         }
       ],
-      "title": "T\u1ed1c \u0111\u1ed9 Qu\u1ea1t GPU (%)",
+      "title": "Tốc độ Quạt GPU (%)",
       "type": "gauge"
     },
     {
@@ -370,21 +370,21 @@
       "targets": [
         {
           "expr": "gpu_temperature_celsius",
-          "legendFormat": "GPU Core",
+          "legendFormat": "Nhân GPU (Core)",
           "refId": "A"
         },
         {
           "expr": "gpu_hotspot_temperature_celsius",
-          "legendFormat": "GPU Hotspot",
+          "legendFormat": "Điểm nóng GPU (Hotspot)",
           "refId": "B"
         },
         {
           "expr": "gpu_memory_temperature_celsius",
-          "legendFormat": "GPU VRAM",
+          "legendFormat": "Bộ nhớ VRAM GPU",
           "refId": "C"
         }
       ],
-      "title": "L\u1ecbch s\u1eed Nhi\u1ec7t \u0111\u1ed9 GPU NVIDIA",
+      "title": "Lịch sử Nhiệt độ GPU NVIDIA",
       "type": "timeseries"
     },
     {
@@ -396,7 +396,7 @@
         "y": 15
       },
       "id": 200,
-      "title": "Nhi\u1ec7t \u0111\u1ed9 CPU & \u1ed4 c\u1ee9ng NVMe SSD",
+      "title": "Nhiệt độ CPU & Ổ cứng NVMe SSD",
       "type": "row"
     },
     {
@@ -439,16 +439,16 @@
       "targets": [
         {
           "expr": "cpu_package_temperature_celsius",
-          "legendFormat": "CPU Package Temp",
+          "legendFormat": "Gói CPU (Package)",
           "refId": "A"
         },
         {
           "expr": "nvme_temperature_celsius",
-          "legendFormat": "{{disk}}",
+          "legendFormat": "Ổ cứng {{disk}}",
           "refId": "B"
         }
       ],
-      "title": "L\u1ecbch s\u1eed Nhi\u1ec7t \u0111\u1ed9 CPU & \u1ed4 c\u1ee9ng",
+      "title": "Lịch sử Nhiệt độ CPU & Ổ cứng",
       "type": "timeseries"
     },
     {
@@ -512,7 +512,7 @@
           "refId": "A"
         }
       ],
-      "title": "CPU Package Temp Hi\u1ec7n t\u1ea1i",
+      "title": "Nhiệt độ Gói CPU Hiện tại (Package)",
       "type": "gauge"
     },
     {
@@ -575,7 +575,7 @@
           "refId": "A"
         }
       ],
-      "title": "Nhi\u1ec7t \u0111\u1ed9 \u1ed4 c\u1ee9ng (NVMe / SSD)",
+      "title": "Nhiệt độ Ổ cứng (NVMe / SSD)",
       "type": "stat"
     }
   ],
@@ -593,7 +593,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Windows - Hardware Thermals & Fan Speeds",
+  "title": "Windows - Nhiệt độ & Quạt Phần cứng",
   "uid": "windows-thermals",
   "version": 1
 }

@@ -69,13 +69,21 @@ function Register-Or-Update-Service {
     $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if (!$existing) {
         Write-Host "[INSTALL] Registering Service: $ServiceName..." -ForegroundColor Yellow
-        & $NssmExe install $ServiceName $AppPath $AppParams | Out-Null
+        if ($AppParams) {
+            & $NssmExe install $ServiceName $AppPath $AppParams | Out-Null
+        } else {
+            & $NssmExe install $ServiceName $AppPath | Out-Null
+        }
     } else {
         Write-Host "[UPDATE] Updating existing Service: $ServiceName..." -ForegroundColor Yellow
     }
 
     & $NssmExe set $ServiceName Application $AppPath | Out-Null
-    & $NssmExe set $ServiceName AppParameters $AppParams | Out-Null
+    if ($AppParams) {
+        & $NssmExe set $ServiceName AppParameters $AppParams | Out-Null
+    } else {
+        & $NssmExe reset $ServiceName AppParameters | Out-Null
+    }
     & $NssmExe set $ServiceName AppDirectory $AppDir | Out-Null
     & $NssmExe set $ServiceName AppStdout $StdoutPath | Out-Null
     & $NssmExe set $ServiceName AppStderr $StderrPath | Out-Null

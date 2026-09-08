@@ -14,8 +14,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Crash Diagnostics",
-      "tooltip": "Windows Blackbox Crash Diagnostics & Flight Recorder",
+      "title": "Chẩn đoán Sự cố",
+      "tooltip": "Hộp đen chẩn đoán sập nguồn & ghi dữ liệu sự cố Windows",
       "type": "link",
       "url": "/d/windows-crash-diagnostics"
     },
@@ -26,8 +26,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Hardware Thermals",
-      "tooltip": "Windows Hardware Thermals & Fan Speeds",
+      "title": "Nhiệt độ & Quạt",
+      "tooltip": "Nhiệt độ phần cứng (CPU, GPU, NVMe) và tốc độ quạt",
       "type": "link",
       "url": "/d/windows-thermals"
     },
@@ -38,8 +38,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "System Resources",
-      "tooltip": "Windows System Health & Resources",
+      "title": "Tài nguyên Hệ thống",
+      "tooltip": "Tài nguyên hệ thống (CPU, RAM, Pagefile, Disk I/O, Network)",
       "type": "link",
       "url": "/d/windows-system"
     },
@@ -50,8 +50,8 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "Network & Security",
-      "tooltip": "Windows Network & Security",
+      "title": "Mạng & An ninh",
+      "tooltip": "Trạng thái mạng, cổng dịch vụ, tường lửa và thiết bị LAN/Tailscale",
       "type": "link",
       "url": "/d/windows-network"
     }
@@ -67,7 +67,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "T\u1ed5ng quan CPU & B\u1ed9 nh\u1edb (RAM / Pagefile)",
+      "title": "Tổng quan CPU & Bộ nhớ (RAM / Pagefile)",
       "type": "row"
     },
     {
@@ -126,11 +126,11 @@
         {
           "expr": "system_cpu_utilization_percent",
           "instant": true,
-          "legendFormat": "CPU %",
+          "legendFormat": "Tổng CPU %",
           "refId": "A"
         }
       ],
-      "title": "CPU S\u1eed d\u1ee5ng T\u1ed5ng th\u1ec3 (%)",
+      "title": "CPU Sử dụng Tổng thể (%)",
       "type": "gauge"
     },
     {
@@ -193,7 +193,7 @@
           "refId": "A"
         }
       ],
-      "title": "B\u1ed9 nh\u1edb RAM (%)",
+      "title": "Bộ nhớ RAM (%)",
       "type": "gauge"
     },
     {
@@ -256,7 +256,7 @@
           "refId": "A"
         }
       ],
-      "title": "Pagefile / Commit Limit (%)",
+      "title": "Bộ nhớ Đệm Pagefile (%)",
       "type": "gauge"
     },
     {
@@ -310,7 +310,7 @@
           "refId": "A"
         }
       ],
-      "title": "Th\u1eddi gian M\u00e1y Ch\u1ea1y Li\u00ean t\u1ee5c (Uptime)",
+      "title": "Thời gian Máy Chạy Liên tục (Uptime)",
       "type": "stat"
     },
     {
@@ -355,11 +355,11 @@
       "targets": [
         {
           "expr": "system_cpu_core_utilization_percent",
-          "legendFormat": "Core {{core}}",
+          "legendFormat": "Nhân {{core}}",
           "refId": "A"
         }
       ],
-      "title": "T\u1ea3i T\u1eebng Nh\u00e2n CPU (Per-Core Util %)",
+      "title": "Tải Từng Nhân CPU (Per-Core Util %)",
       "type": "timeseries"
     },
     {
@@ -402,16 +402,16 @@
       "targets": [
         {
           "expr": "system_memory_used_bytes",
-          "legendFormat": "RAM Used",
+          "legendFormat": "RAM Đang dùng",
           "refId": "A"
         },
         {
           "expr": "system_pagefile_used_bytes",
-          "legendFormat": "Pagefile Used",
+          "legendFormat": "Pagefile Đang dùng",
           "refId": "B"
         }
       ],
-      "title": "Dung l\u01b0\u1ee3ng RAM & Pagefile \u0110ang S\u1eed d\u1ee5ng",
+      "title": "Dung lượng RAM & Pagefile Đang Sử dụng",
       "type": "timeseries"
     },
     {
@@ -423,7 +423,7 @@
         "y": 20
       },
       "id": 300,
-      "title": "Hi\u1ec7u n\u0103ng & B\u0103ng th\u00f4ng \u1ed4 \u0111\u0129a (Disk I/O Bandwidth & IOPS)",
+      "title": "Hiệu năng & Băng thông Ổ đĩa (Disk I/O Bandwidth & IOPS)",
       "type": "row"
     },
     {
@@ -446,7 +446,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "\u0110\u1ecdc (Read)"
+              "options": "Đọc (Read)"
             },
             "properties": [
               {
@@ -502,7 +502,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_disk_read_bytes_total[1m])",
-          "legendFormat": "\u0110\u1ecdc (Read)",
+          "legendFormat": "Đọc (Read)",
           "refId": "A"
         },
         {
@@ -515,7 +515,7 @@
           "refId": "B"
         }
       ],
-      "title": "B\u0103ng th\u00f4ng \u0110\u1ecdc / Ghi \u1ed4 \u0111\u0129a (Disk I/O Bandwidth)",
+      "title": "Băng thông Đọc / Ghi Ổ đĩa (Disk I/O Bandwidth - MB/s)",
       "type": "timeseries"
     },
     {
@@ -593,7 +593,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_disk_reads_completed_total[1m])",
-          "legendFormat": "Read IOPS",
+          "legendFormat": "IOPS Đọc",
           "refId": "A"
         },
         {
@@ -602,11 +602,11 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_disk_writes_completed_total[1m])",
-          "legendFormat": "Write IOPS",
+          "legendFormat": "IOPS Ghi",
           "refId": "B"
         }
       ],
-      "title": "T\u1ea7n su\u1ea5t Truy xu\u1ea5t \u1ed4 \u0111\u0129a (Disk IOPS)",
+      "title": "Tần suất Truy xuất Ổ đĩa (Disk IOPS - Thao tác/giây)",
       "type": "timeseries"
     },
     {
@@ -618,7 +618,7 @@
         "y": 30
       },
       "id": 400,
-      "title": "Hi\u1ec7u n\u0103ng B\u0103ng th\u00f4ng M\u1ea1ng & K\u1ebft n\u1ed1i TCP (Network Bandwidth & TCP States)",
+      "title": "Băng thông & Lưu lượng Card Mạng (Network Traffic & Drops)",
       "type": "row"
     },
     {
@@ -641,7 +641,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "T\u1ea3i v\u1ec1 (Download)"
+              "options": "Tải về (Download)"
             },
             "properties": [
               {
@@ -656,7 +656,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "T\u1ea3i l\u00ean (Upload)"
+              "options": "Tải lên (Upload)"
             },
             "properties": [
               {
@@ -697,7 +697,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_network_receive_bytes_total[1m])",
-          "legendFormat": "T\u1ea3i v\u1ec1 (Download)",
+          "legendFormat": "Tải xuống (Download)",
           "refId": "A"
         },
         {
@@ -706,11 +706,11 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_network_transmit_bytes_total[1m])",
-          "legendFormat": "T\u1ea3i l\u00ean (Upload)",
+          "legendFormat": "Tải lên (Upload)",
           "refId": "B"
         }
       ],
-      "title": "B\u0103ng th\u00f4ng M\u1ea1ng (Network Bandwidth)",
+      "title": "Băng thông Card Mạng (Tải xuống / Tải lên - MB/s)",
       "type": "timeseries"
     },
     {
@@ -755,7 +755,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_network_receive_drop_total[1m])",
-          "legendFormat": "Drop In",
+          "legendFormat": "Gói tin Rơi Tải xuống",
           "refId": "A"
         },
         {
@@ -764,7 +764,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_network_transmit_drop_total[1m])",
-          "legendFormat": "Drop Out",
+          "legendFormat": "Gói tin Rơi Tải lên",
           "refId": "B"
         },
         {
@@ -773,7 +773,7 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_network_receive_errs_total[1m])",
-          "legendFormat": "Err In",
+          "legendFormat": "Lỗi Mạng Tải xuống",
           "refId": "C"
         },
         {
@@ -782,11 +782,11 @@
             "uid": "Prometheus"
           },
           "expr": "rate(system_network_transmit_errs_total[1m])",
-          "legendFormat": "Err Out",
+          "legendFormat": "Lỗi Mạng Tải lên",
           "refId": "D"
         }
       ],
-      "title": "G\u00f3i tin B\u1ecb Drop & L\u1ed7i M\u1ea1ng (Network Drops & Errors)",
+      "title": "Lỗi & Gói tin Bị Rơi (Network Errors & Drops)",
       "type": "timeseries"
     },
     {
@@ -835,7 +835,7 @@
           "refId": "A"
         }
       ],
-      "title": "Tr\u1ea1ng th\u00e1i K\u1ebft n\u1ed1i TCP (TCP States)",
+      "title": "Trạng thái Kết nối TCP (TCP States)",
       "type": "timeseries"
     },
     {
@@ -847,7 +847,7 @@
         "y": 35
       },
       "id": 200,
-      "title": "Ph\u00e2n v\u00f9ng \u1ed4 \u0111\u0129a Windows (C:, D:...)",
+      "title": "Phân vùng Ổ đĩa Windows (C:, D:...)",
       "type": "row"
     },
     {
@@ -906,11 +906,11 @@
         {
           "expr": "system_disk_utilization_percent",
           "instant": true,
-          "legendFormat": "\u1ed4 {{drive}}",
+          "legendFormat": "Ổ {{drive}}",
           "refId": "A"
         }
       ],
-      "title": "T\u1ef7 l\u1ec7 S\u1eed d\u1ee5ng Dung l\u01b0\u1ee3ng \u1ed4 \u0111\u0129a (%)",
+      "title": "Tỷ lệ Sử dụng Dung lượng Ổ đĩa (%)",
       "type": "gauge"
     },
     {
@@ -945,7 +945,7 @@
           "refId": "A"
         }
       ],
-      "title": "B\u1ea3ng Chi ti\u1ebft Dung l\u01b0\u1ee3ng \u1ed4 \u0111\u0129a",
+      "title": "Bảng Chi tiết Dung lượng Ổ đĩa",
       "type": "table"
     }
   ],
@@ -964,7 +964,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Windows - System Health & Resources",
+  "title": "Windows - Tài nguyên & Sức khỏe Hệ thống",
   "uid": "windows-system",
   "version": 1
 }
