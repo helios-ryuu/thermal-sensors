@@ -18,7 +18,7 @@ foreach ($s in $Services) {
     if ($svc) {
         $color = if ($svc.Status -eq "Running") { "Green" } else { "Red" }
         Write-Host "Service $s : " -NoNewline
-        Write-Host "$($svc.Status)" -ForegroundColor $color
+        Write-Host "$($svc.Status) (Startup: $($svc.StartType))" -ForegroundColor $color
     } else {
         Write-Host "Service $s : " -NoNewline
         Write-Host "NOT INSTALLED" -ForegroundColor Yellow
