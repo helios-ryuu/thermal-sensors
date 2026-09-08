@@ -112,8 +112,31 @@ Register-Or-Update-Service `
     -StdoutPath (Join-Path $BaseDir "logs\prometheus.log") `
     -StderrPath (Join-Path $BaseDir "logs\prometheus.log")
 
-# 3. Service: WindowsGrafana
+# 3. Synchronize Grafana Configuration & Dashboards
 $GrafHome = Join-Path $BaseDir "bin\grafana"
+$GrafProvDir = Join-Path $GrafHome "conf\provisioning"
+if (Test-Path $GrafProvDir) {
+    $LocalProvDir = Join-Path $BaseDir "config\grafana\provisioning"
+    Copy-Item -Path "$LocalProvDir\*" -Destination $GrafProvDir -Recurse -Force
+    Write-Host "[CONFIG] Synchronized Grafana Provisioning (Datasource UID 'Prometheus')." -ForegroundColor Green
+}
+
+$GrafDashDir = Join-Path $GrafHome "dashboards"
+New-Item -ItemType Directory -Force -Path $GrafDashDir | Out-Null
+Copy-Item -Path "$BaseDir\dashboards\*.json" -Destination $GrafDashDir -Force
+Write-Host "[CONFIG] Synchronized 4 Dashboards into bin\grafana\dashboards." -ForegroundColor Green
+
+# Clean stale SQLite database so Grafana recreates fresh with UID 'Prometheus'
+$GrafDb = Join-Path $BaseDir "data\grafana\grafana.db"
+if (Test-Path $GrafDb) {
+    try {
+        Stop-Service -Name "WindowsGrafana" -Force -ErrorAction SilentlyContinue
+        Remove-Item $GrafDb -Force -ErrorAction SilentlyContinue
+        Write-Host "[CONFIG] Re-initialized grafana.db to bind UID 'Prometheus' cleanly." -ForegroundColor Green
+    } catch {}
+}
+
+# 4. Service: WindowsGrafana
 $GrafExe = Join-Path $GrafHome "bin\grafana.exe"
 $GrafArgs = "server --homepath `"$GrafHome`""
 

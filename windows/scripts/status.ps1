@@ -40,6 +40,48 @@ foreach ($p in $Ports) {
     }
 }
 
+Write-Host "`n----------------------------------------------------------" -ForegroundColor Gray
+Write-Host "DATA PIPELINE HEALTH CHECK:" -ForegroundColor Cyan
+
+# 1. Test Agent
+try {
+    $agentResp = Invoke-WebRequest -Uri "http://127.0.0.1:9100/metrics" -UseBasicParsing -TimeoutSec 3
+    if ($agentResp.StatusCode -eq 200) {
+        $lines = ($agentResp.Content -split "`n").Count
+        Write-Host "  [AGENT] Metrics HTTP 200 OK ($lines metric lines streaming)" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "  [AGENT] Could not query http://127.0.0.1:9100/metrics : $_" -ForegroundColor Red
+}
+
+# 2. Test Prometheus Target
+try {
+    $promTargets = Invoke-RestMethod -Uri "http://127.0.0.1:9090/api/v1/targets" -TimeoutSec 3
+    $t = $promTargets.data.activeTargets | Where-Object { $_.scrapeUrl -like "*9100*" } | Select-Object -First 1
+    if ($t) {
+        $hColor = if ($t.health -eq "up") { "Green" } else { "Red" }
+        Write-Host "  [PROMETHEUS] Target $($t.scrapeUrl) Health: $($t.health)" -ForegroundColor $hColor
+    } else {
+        Write-Host "  [PROMETHEUS] No target matching port 9100 found" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "  [PROMETHEUS] Could not query Prometheus targets API" -ForegroundColor Yellow
+}
+
+# 3. Test Grafana Datasource
+try {
+    $auth = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("admin:admin"))
+    $grafDs = Invoke-RestMethod -Uri "http://127.0.0.1:3000/api/datasources" -Headers @{ Authorization = $auth } -TimeoutSec 3
+    $pDs = $grafDs | Where-Object { $_.type -eq "prometheus" } | Select-Object -First 1
+    if ($pDs) {
+        Write-Host "  [GRAFANA] Datasource: $($pDs.name) | UID: $($pDs.uid) (Target: $($pDs.url))" -ForegroundColor Green
+    } else {
+        Write-Host "  [GRAFANA] No Prometheus datasource provisioned!" -ForegroundColor Red
+    }
+} catch {
+    Write-Host "  [GRAFANA] Could not query Grafana datasources API (Grafana might be starting)" -ForegroundColor Gray
+}
+
 # Tailscale Remote Access Detection
 $tsIp = $null
 try {

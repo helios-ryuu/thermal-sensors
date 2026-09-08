@@ -221,6 +221,11 @@ New-Item -ItemType Directory -Force -Path $GrafDashDir | Out-Null
 Copy-Item -Path "$BaseDir\dashboards\*.json" -Destination $GrafDashDir -Force
 Write-Host "[CONFIG] Synchronized 4 Dashboards (Blackbox Crash, Thermals, System, Network) into Grafana." -ForegroundColor Green
 
+$GrafDb = Join-Path $BaseDir "data\grafana\grafana.db"
+if (Test-Path $GrafDb) {
+    Remove-Item $GrafDb -Force -ErrorAction SilentlyContinue
+}
+
 # ==============================================================================
 # 5. INSTALL PYTHON REQUIREMENTS
 # ==============================================================================

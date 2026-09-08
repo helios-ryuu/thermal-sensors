@@ -2,11 +2,13 @@ apiVersion: 1
 
 datasources:
   - name: Prometheus
+    uid: Prometheus
     type: prometheus
     access: proxy
     url: http://127.0.0.1:9090
     isDefault: true
-    editable: false
+    editable: true
+    version: 2
     jsonData:
       timeInterval: 5s
       httpMethod: POST
