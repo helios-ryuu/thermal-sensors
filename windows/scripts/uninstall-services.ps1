@@ -24,4 +24,10 @@ foreach ($s in $Services) {
     }
 }
 
+try {
+    Get-NetFirewallRule -DisplayName "Monitoring Stack*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+    netsh interface portproxy reset | Out-Null
+    Write-Host "  [CLEANUP] Removed firewall rules and portproxy entries." -ForegroundColor Green
+} catch {}
+
 Write-Host "`nSuccessfully uninstalled all monitoring services from Windows." -ForegroundColor Green

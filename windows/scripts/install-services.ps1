@@ -110,7 +110,7 @@ Register-Or-Update-Service `
 $PromExe = Join-Path $BaseDir "bin\prometheus\prometheus.exe"
 $PromCfg = Join-Path $BaseDir "config\prometheus.yml"
 $PromData = Join-Path $BaseDir "data\prometheus"
-$PromArgs = "--config.file=`"$PromCfg`" --storage.tsdb.path=`"$PromData`" --storage.tsdb.retention.time=30d --web.listen-address=`"0.0.0.0:9090`" --web.enable-admin-api --web.enable-lifecycle"
+$PromArgs = "--config.file=`"$PromCfg`" --storage.tsdb.path=`"$PromData`" --storage.tsdb.retention.time=30d --web.listen-address=`"127.0.0.1:9090`" --web.enable-admin-api --web.enable-lifecycle"
 
 Register-Or-Update-Service `
     -ServiceName "WindowsPrometheus" `
@@ -216,16 +216,62 @@ if (Test-Path $LhmExe) {
         -StderrPath (Join-Path $BaseDir "logs\lhm.log")
 }
 
-# 4. Firewall Inbound Rule for Tailscale / Remote access
+# 4. Tailscale PortProxy and Firewall Inbound Rules
+$tsIp = $null
 try {
-    $RuleName = "Monitoring Stack (Grafana 3000, Prometheus 9090, Agent 9100)"
-    $existing = Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue
-    if (!$existing) {
-        New-NetFirewallRule -DisplayName $RuleName -Direction Inbound -LocalPort 3000,9090,9100 -Protocol TCP -Action Allow -Profile Any | Out-Null
-        Write-Host "[FIREWALL] Opened Inbound TCP Ports 3000, 9090, 9100 for Tailscale/LAN." -ForegroundColor Green
+    $tsCmd = Get-Command tailscale.exe -ErrorAction SilentlyContinue
+    if ($tsCmd) {
+        $tsIp = (& $tsCmd.Source ip -4 2>$null).Trim()
     }
+} catch {}
+if (!$tsIp) {
+    $tsAdapter = Get-NetIPAddress -InterfaceAlias "*tailscale*" -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($tsAdapter) {
+        $tsIp = $tsAdapter.IPAddress
+    }
+}
+
+if ($tsIp) {
+    Write-Host "[SECURITY] Configuring Tailscale-only portproxy on $tsIp for ports 9090, 9100..." -ForegroundColor Cyan
+    try {
+        netsh interface portproxy delete v4tov4 listenport=9090 listenaddress=$tsIp 2>$null | Out-Null
+        netsh interface portproxy delete v4tov4 listenport=9100 listenaddress=$tsIp 2>$null | Out-Null
+        netsh interface portproxy add v4tov4 listenport=9090 listenaddress=$tsIp connectport=9090 connectaddress=127.0.0.1 | Out-Null
+        netsh interface portproxy add v4tov4 listenport=9100 listenaddress=$tsIp connectport=9100 connectaddress=127.0.0.1 | Out-Null
+        Write-Host "  [OK] Tailscale portproxy active: $tsIp:9090 -> 127.0.0.1:9090" -ForegroundColor Green
+        Write-Host "  [OK] Tailscale portproxy active: $tsIp:9100 -> 127.0.0.1:9100" -ForegroundColor Green
+    } catch {
+        Write-Host "  [WARN] Could not configure netsh portproxy: $_" -ForegroundColor Yellow
+    }
+}
+
+try {
+    # Remove any old permissive firewall rules
+    Get-NetFirewallRule -DisplayName "Monitoring Stack*" -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+
+    # Rule 1: Grafana 3000 (Allow Tailscale mesh and Local LAN)
+    New-NetFirewallRule `
+        -DisplayName "Monitoring Stack - Grafana Dashboard (Port 3000)" `
+        -Direction Inbound `
+        -LocalPort 3000 `
+        -Protocol TCP `
+        -Action Allow `
+        -RemoteAddress "100.64.0.0/10", "LocalSubnet" `
+        -Profile Any | Out-Null
+    Write-Host "[FIREWALL] Port 3000 allowed strictly for Tailscale (100.64.0.0/10) and LocalSubnet." -ForegroundColor Green
+
+    # Rule 2: Prometheus 9090 and Agent 9100 (Allow ONLY Tailscale mesh 100.64.0.0/10 - Blocked on LAN and Public)
+    New-NetFirewallRule `
+        -DisplayName "Monitoring Stack - Tailscale Private (Ports 9090, 9100)" `
+        -Direction Inbound `
+        -LocalPort 9090, 9100 `
+        -Protocol TCP `
+        -Action Allow `
+        -RemoteAddress "100.64.0.0/10" `
+        -Profile Any | Out-Null
+    Write-Host "[FIREWALL] Ports 9090 and 9100 restricted strictly to Tailscale (100.64.0.0/10) - Blocked on LAN and Public." -ForegroundColor Green
 } catch {
-    Write-Host "[INFO] Firewall rule skipped (requires Admin rights, Tailscale can still route directly)." -ForegroundColor Gray
+    Write-Host "[INFO] Firewall rule configuration skipped (requires Admin rights)." -ForegroundColor Gray
 }
 
 Write-Host "==========================================================" -ForegroundColor Green

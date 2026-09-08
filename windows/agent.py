@@ -46,7 +46,7 @@ logging.basicConfig(
 )
 
 METRICS_PORT = int(os.environ.get("AGENT_PORT", "9100"))
-BIND_IP = os.environ.get("AGENT_BIND_IP", "0.0.0.0")
+BIND_IP = os.environ.get("AGENT_BIND_IP", "127.0.0.1")
 FAST_INTERVAL = float(os.environ.get("AGENT_FAST_INTERVAL", "5"))   # 5s: Thermals, Watts, Voltages, CPU, RAM, IO
 SLOW_INTERVAL = float(os.environ.get("AGENT_SLOW_INTERVAL", "60"))  # 60s: EventLog, Ping Dials, Inventory, Disks
 
